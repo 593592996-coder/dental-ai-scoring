@@ -19,7 +19,7 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from io import BytesIO
 
 from scoring_engine_v2 import II类洞评分引擎V2, SCORING_CONFIG
-from scoring_endodontic import 开髓洞形评分引擎, SCORING_CONFIG as ENDO_CONFIG
+from scoring_endodontic import 开髓术评分引擎, SCORING_CONFIG as ENDO_CONFIG
 from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFIG
 
 # ── App Setup ──
@@ -48,7 +48,7 @@ for f in sorted(REPORT_FOLDER.glob('*.json')):
         pass
 
 engine = II类洞评分引擎V2()
-endo_engine = 开髓洞形评分引擎()
+endo_engine = 开髓术评分引擎()
 xray_engine = 根管X光片评估引擎()
 
 
