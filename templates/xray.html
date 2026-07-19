@@ -1,256 +1,89 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>II类洞AI评分系统 — 学生端</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family: 'Microsoft YaHei','PingFang SC',sans-serif; background:#f0f4f8; min-height:100vh; }
-        .header { background: linear-gradient(135deg, #1B3A5C, #2B7BEC); color:#fff; padding:20px 0; text-align:center; }
-        .header h1 { font-size:28px; font-weight:700; }
-        .header p { font-size:14px; opacity:.85; margin-top:5px; }
-        .container { max-width:960px; margin:30px auto; padding:0 20px; }
-        .card { background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
-        .card h2 { font-size:18px; color:#1B3A5C; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #2B7BEC; }
-        .form-group { margin-bottom:16px; }
-        .form-group label { display:block; font-size:14px; color:#2C3E50; margin-bottom:6px; font-weight:600; }
-        .form-group input, .form-group select { width:100%; padding:10px 14px; border:1.5px solid #dde; border-radius:8px; font-size:14px; transition:border .3s; }
-        .form-group input:focus { outline:none; border-color:#2B7BEC; }
-        .upload-zone { border:2px dashed #2B7BEC; border-radius:12px; padding:40px; text-align:center; cursor:pointer; transition:all .3s; background:#f8fafd; }
-        .upload-zone:hover, .upload-zone.dragover { background:#e8f0fe; border-color:#1B3A5C; }
-        .upload-zone .icon { font-size:48px; margin-bottom:10px; }
-        .upload-zone .text { font-size:15px; color:#2C3E50; }
-        .upload-zone .hint { font-size:12px; color:#999; margin-top:5px; }
-        .preview-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:12px; margin-top:12px; }
-        .preview-item { position:relative; border-radius:8px; overflow:hidden; aspect-ratio:1; background:#eee; }
-        .preview-item img { width:100%; height:100%; object-fit:cover; }
-        .preview-item .remove { position:absolute; top:4px; right:4px; background:rgba(255,0,0,.8); color:#fff; border:none; border-radius:50%; width:22px; height:22px; cursor:pointer; font-size:14px; }
-        .btn { display:inline-block; padding:12px 32px; border:none; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer; transition:all .3s; }
-        .btn-primary { background:linear-gradient(135deg,#1B3A5C,#2B7BEC); color:#fff; width:100%; }
-        .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(43,123,236,.4); }
-        .btn-primary:disabled { background:#ccc; cursor:not-allowed; transform:none; }
-        .photo-guide { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:12px; }
-        .guide-item { text-align:center; padding:10px; background:#f8fafd; border-radius:8px; font-size:11px; color:#666; }
-        .guide-item .num { display:inline-block; width:20px; height:20px; line-height:20px; background:#2B7BEC; color:#fff; border-radius:50%; font-size:12px; margin-bottom:4px; }
-        .result-area { display:none; animation:fadeIn .5s; }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
-        .score-circle { width:120px; height:120px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:0 auto 20px; }
-        .score-circle.excellent { background:linear-gradient(135deg,#27ae60,#2ecc71); }
-        .score-circle.good { background:linear-gradient(135deg,#2B7BEC,#3498db); }
-        .score-circle.mid { background:linear-gradient(135deg,#f39c12,#e67e22); }
-        .score-circle.pass { background:linear-gradient(135deg,#e67e22,#d35400); }
-        .score-circle.fail { background:linear-gradient(135deg,#c0392b,#e74c3c); }
-        .score-circle .big { font-size:36px; font-weight:700; color:#fff; }
-        .score-circle .small { font-size:13px; color:rgba(255,255,255,.85); }
-        .dim-bar { display:flex; align-items:center; margin:8px 0; }
-        .dim-bar .label { width:90px; font-size:13px; color:#2C3E50; text-align:right; padding-right:8px; }
-        .dim-bar .bar-wrap { flex:1; height:22px; background:#eee; border-radius:11px; overflow:hidden; }
-        .dim-bar .bar-fill { height:100%; border-radius:11px; transition:width 1s; }
-        .dim-bar .bar-fill.good { background:linear-gradient(90deg,#27ae60,#2ecc71); }
-        .dim-bar .bar-fill.warning { background:linear-gradient(90deg,#f39c12,#e67e22); }
-        .dim-bar .bar-fill.bad { background:linear-gradient(90deg,#c0392b,#e74c3c); }
-        .dim-bar .dim-score { width:55px; font-size:12px; color:#666; padding-left:8px; }
-        .suggestion-box { background:#fff8e1; border-left:4px solid #f39c12; padding:12px 16px; border-radius:8px; margin-top:12px; }
-        .suggestion-box h4 { color:#e67e22; font-size:14px; margin-bottom:6px; }
-        .suggestion-box li { font-size:13px; color:#666; margin:4px 0; margin-left:16px; }
-        .loading-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:999; justify-content:center; align-items:center; }
-        .loading-overlay.show { display:flex; }
-        .loading-box { background:#fff; border-radius:16px; padding:40px; text-align:center; }
-        .spinner { width:50px; height:50px; border:4px solid #eee; border-top:4px solid #2B7BEC; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px; }
-        @keyframes spin { to{transform:rotate(360deg);} }
-    </style>
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>根管X光片AI评估</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#1B3A5C,#e67e22);color:#fff;padding:20px 0;text-align:center}
+.header h1{font-size:28px;font-weight:700}.header p{font-size:14px;opacity:.85;margin-top:5px}
+.container{max-width:960px;margin:30px auto;padding:0 20px}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.card h2{font-size:18px;color:#1B3A5C;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #e67e22}
+.form-group{margin-bottom:16px}.form-group label{display:block;font-size:14px;color:#2C3E50;margin-bottom:6px;font-weight:600}
+.form-group input{width:100%;padding:10px 14px;border:1.5px solid #dde;border-radius:8px;font-size:14px}
+.upload-zone{border:2px dashed #e67e22;border-radius:12px;padding:40px;text-align:center;cursor:pointer;transition:.3s;background:#fffdf5}
+.upload-zone:hover{background:#fef9e7}.upload-zone .icon{font-size:48px;margin-bottom:10px}
+.upload-zone .text{font-size:15px;color:#2C3E50}.upload-zone .hint{font-size:12px;color:#999;margin-top:5px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px}
+.preview-item{position:relative;border-radius:8px;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center}
+.preview-item img{width:100%;height:auto;object-fit:contain}.preview-item .remove{position:absolute;top:4px;right:4px;background:rgba(255,0,0,.8);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:14px}
+.btn{display:inline-block;padding:12px 32px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:.3s}
+.btn-primary{background:linear-gradient(135deg,#e67e22,#d35400);color:#fff;width:100%}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(230,126,34,.4)}
+.btn-primary:disabled{background:#ccc;cursor:not-allowed;transform:none}
+.result-area{display:none;animation:fadeIn .5s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.score-circle{width:120px;height:120px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 20px}
+.score-circle.excellent{background:linear-gradient(135deg,#27ae60,#2ecc71)}.score-circle.good{background:linear-gradient(135deg,#2B7BEC,#3498db)}.score-circle.mid{background:linear-gradient(135deg,#f39c12,#e67e22)}
+.score-circle.pass{background:linear-gradient(135deg,#e67e22,#d35400)}.score-circle.fail{background:linear-gradient(135deg,#c0392b,#e74c3c)}
+.score-circle .big{font-size:36px;font-weight:700;color:#fff}.score-circle .small{font-size:13px;color:rgba(255,255,255,.85)}
+.dim-bar{display:flex;align-items:center;margin:4px 0}.dim-bar .label{width:100px;font-size:13px;color:#2C3E50;text-align:right;padding-right:8px}
+.dim-bar .bar-wrap{flex:1;height:22px;background:#eee;border-radius:11px;overflow:hidden}
+.dim-bar .bar-fill{height:100%;border-radius:11px;transition:width 1s}
+.dim-bar .bar-fill.good{background:linear-gradient(90deg,#27ae60,#2ecc71)}.dim-bar .bar-fill.warning{background:linear-gradient(90deg,#f39c12,#e67e22)}.dim-bar .bar-fill.bad{background:linear-gradient(90deg,#c0392b,#e74c3c)}
+.dim-bar .dim-score{width:55px;font-size:12px;color:#666;padding-left:8px}
+.suggestion-box{background:#fff8e1;border-left:4px solid #f39c12;padding:12px 16px;border-radius:8px;margin-top:12px}
+.suggestion-box h4{color:#e67e22;font-size:14px;margin-bottom:6px}.suggestion-box li{font-size:13px;color:#666;margin:4px 0;margin-left:16px}
+.loading-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:999;justify-content:center;align-items:center}
+.loading-overlay.show{display:flex}.loading-box{background:#fff;border-radius:16px;padding:40px;text-align:center}
+.spinner{width:50px;height:50px;border:4px solid #eee;border-top:4px solid #e67e22;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.process-box{margin-left:24px;margin-bottom:10px}
+.process-box pre{white-space:pre-wrap;font-size:11px;color:#555;background:#f9fafb;padding:10px;border-radius:6px;line-height:1.5;margin:0}
+.back-link{display:block;text-align:center;margin-top:20px;color:#e67e22;text-decoration:none;font-size:14px}
+.note{background:#fef9e7;border:1px solid #f9e79f;border-radius:8px;padding:12px;font-size:13px;color:#7d6608;margin-bottom:16px}
+</style></head>
 <body>
-<div class="header">
-    <h1>🦷 根管充填X光片 AI评估系统</h1>
-    <p>拍照上传 → AI自动分析 → 即时评分报告</p>
-</div>
-
+<div class="header"><h1>🩻 根管充填X光片 AI评估</h1><p>上传术后X光片→AI评估充填质量→即时评分报告</p></div>
 <div class="container">
-    <!-- Upload Card -->
-    <div class="card" id="uploadCard">
-        <h2>📸 上传制备照片</h2>
-        <div class="form-group">
-            <label>学生姓名</label>
-            <input type="text" id="studentName" placeholder="请输入姓名">
-        </div>
-        <div class="form-group">
-            <label>班级</label>
-            <input type="text" id="studentClass" placeholder="如：25口腔1班" value="25口腔1班">
-        </div>
-        <div class="form-group">
-            <label>牙类型</label>
-            <select id="toothType" style="width:100%;padding:10px 14px;border:1.5px solid #dde;border-radius:8px;font-size:14px;">
-                <option value="real">🦷 离体牙（天然牙，有色差层次）</option>
-                <option value="resin">🦷 树脂牙（单色，几何估深）</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>操作时长（分钟，可选）</label>
-            <input type="number" id="opTime" placeholder="如：18" min="1" max="60">
-        </div>
-        <div class="upload-zone" id="uploadZone">
-            <div class="icon">📷</div>
-            <div class="text">点击上传或拖拽照片到此处</div>
-            <div class="hint">支持 JPG/PNG/BMP，上传根管充填术后X光片（颌面正位+邻面侧位+45°斜位）</div>
-            <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
-        </div>
-        <div class="preview-grid" id="previewGrid"></div>
-        <div style="margin-top:16px;">
-            <button class="btn btn-primary" id="analyzeBtn" disabled>🔍 开始AI分析</button>
-        </div>
-        <!-- 拍摄指引 -->
-        <div class="photo-guide" style="margin-top:16px;">
-            <div class="guide-item"><span class="num">1</span><br>颌面正位<br>俯拍鸠尾轮廓</div>
-            <div class="guide-item"><span class="num">2</span><br>邻面侧位<br>拍邻面盒形</div>
-            <div class="guide-item"><span class="num">3</span><br>45°斜位<br>拍洞壁过渡</div>
-            <div class="guide-item"><span class="num">4</span><br>45°斜位<br>另一侧</div>
-            <div class="guide-item"><span class="num">5</span><br>洞底特写<br>含参考标尺</div>
-        </div>
-    </div>
-
-    <!-- Result Card -->
-    <div class="card result-area" id="resultCard">
-        <h2>📊 AI评分报告</h2>
-        <div style="text-align:center;" id="resultContent"></div>
-        <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-primary" style="width:auto;padding:10px 24px;font-size:14px;background:#27ae60;margin-right:8px;" onclick="window.print()">🖨 打印报告</button>
-            <button class="btn btn-primary" style="width:auto;padding:10px 24px;font-size:14px;" onclick="location.reload()">🔄 分析下一份</button>
-        </div>
-    </div>
+<a href="/" class="back-link">← 返回首页</a><br>
+<div class="note">⚠️ X光片评估基于图像分析，精度受限于规则引擎。评估结果仅供参考，需结合临床判读确认。</div>
+<div class="card" id="uploadCard">
+<h2>🩻 上传根管充填X光片</h2>
+<div class="form-group"><label>学生姓名</label><input type="text" id="studentName" placeholder="请输入姓名"></div>
+<div class="form-group"><label>班级</label><input type="text" id="studentClass" value="25口腔1班"></div>
+<div class="upload-zone" id="uploadZone"><div class="icon">🩻</div><div class="text">上传根管充填术后X光片</div><div class="hint">支持JPG/PNG，建议上传清晰的正位/偏位投照X光片</div><input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
+<div class="preview-grid" id="previewGrid"></div>
+<div style="margin-top:16px"><button class="btn btn-primary" id="analyzeBtn" disabled>🩻 开始AI评估</button></div>
 </div>
-
-<div class="loading-overlay" id="loadingOverlay">
-    <div class="loading-box">
-        <div class="spinner"></div>
-        <p style="font-size:16px;color:#1B3A5C;font-weight:600;">AI正在分析中…</p>
-        <p style="font-size:13px;color:#999;">检测制备区域·测量尺寸·计算评分</p>
-    </div>
+<div class="card result-area" id="resultCard"><h2>📊 AI评估报告</h2><div style="text-align:center" id="resultContent"></div>
+<div style="text-align:center;margin-top:16px">
+<button class="btn btn-primary" style="width:auto;padding:10px 24px;font-size:14px;background:#27ae60;margin-right:8px" onclick="window.print()">🖨 打印报告</button>
+<button class="btn btn-primary" style="width:auto;padding:10px 24px;font-size:14px" onclick="location.reload()">🔄 评估下一份</button></div></div>
 </div>
-
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-box"><div class="spinner"></div><p style="font-size:16px;color:#1B3A5C;font-weight:600">AI正在分析X光片…</p><p style="font-size:13px;color:#999">检测充填材料·评估长度·分析致密度·识别空隙</p></div></div>
 <script>
-const uploadZone = document.getElementById('uploadZone');
-const fileInput = document.getElementById('fileInput');
-const previewGrid = document.getElementById('previewGrid');
-const analyzeBtn = document.getElementById('analyzeBtn');
-const resultCard = document.getElementById('resultCard');
-const loadingOverlay = document.getElementById('loadingOverlay');
-let selectedFiles = [];
+const uploadZone=document.getElementById('uploadZone'),fileInput=document.getElementById('fileInput'),previewGrid=document.getElementById('previewGrid'),analyzeBtn=document.getElementById('analyzeBtn'),resultCard=document.getElementById('resultCard'),loadingOverlay=document.getElementById('loadingOverlay');
+let selectedFiles=[];
+uploadZone.addEventListener('click',()=>fileInput.click());
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover')});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover');handleFiles(e.dataTransfer.files)});
+fileInput.addEventListener('change',e=>handleFiles(e.target.files));
+function handleFiles(files){for(let f of files){if(f.type.startsWith('image/')){selectedFiles.push(f);const r=new FileReader();r.onload=e=>{const d=document.createElement('div');d.className='preview-item';d.innerHTML='<img src="'+e.target.result+'"><button class="remove">&times;</button>';d.querySelector('.remove').onclick=()=>{selectedFiles=selectedFiles.filter(x=>x.name!==f.name);d.remove();analyzeBtn.disabled=selectedFiles.length===0};previewGrid.appendChild(d)};r.readAsDataURL(f)}}analyzeBtn.disabled=selectedFiles.length===0}
+analyzeBtn.addEventListener('click',async()=>{if(!selectedFiles.length)return;loadingOverlay.classList.add('show');const fd=new FormData();selectedFiles.forEach(f=>fd.append('photos',f));fd.append('student_name',document.getElementById('studentName').value||'匿名');fd.append('student_class',document.getElementById('studentClass').value||'未知班级');
+try{const resp=await fetch('/analyze_xray',{method:'POST',body:fd});const data=await resp.json();if(data.error){alert(data.error);return}renderResult(data)}catch(err){alert('分析失败:'+err.message)}finally{loadingOverlay.classList.remove('show');resultCard.style.display='block';resultCard.scrollIntoView({behavior:'smooth'})}});
 
-uploadZone.addEventListener('click', () => fileInput.click());
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
-fileInput.addEventListener('change', e => handleFiles(e.target.files));
-
-function handleFiles(files) {
-    for (let f of files) {
-        if (f.type.startsWith('image/')) {
-            selectedFiles.push(f);
-            const reader = new FileReader();
-            reader.onload = e => {
-                const div = document.createElement('div'); div.className = 'preview-item';
-                div.innerHTML = `<img src="${e.target.result}"><button class="remove" onclick="removeFile(this,'${f.name}')">×</button>`;
-                previewGrid.appendChild(div);
-            };
-            reader.readAsDataURL(f);
-        }
-    }
-    analyzeBtn.disabled = selectedFiles.length === 0;
-    analyzeBtn.textContent = selectedFiles.length ? `🔍 分析 ${selectedFiles.length} 张照片` : '🔍 开始AI分析';
-}
-
-function removeFile(btn, name) {
-    selectedFiles = selectedFiles.filter(f => f.name !== name);
-    btn.parentElement.remove();
-    analyzeBtn.disabled = selectedFiles.length === 0;
-    analyzeBtn.textContent = selectedFiles.length ? `🔍 分析 ${selectedFiles.length} 张照片` : '🔍 开始AI分析';
-}
-
-analyzeBtn.addEventListener('click', async () => {
-    if (!selectedFiles.length) return;
-    loadingOverlay.classList.add('show');
-    document.getElementById('uploadCard').style.opacity = '0.5';
-
-    const formData = new FormData();
-    selectedFiles.forEach(f => formData.append('photos', f));
-    formData.append('student_name', document.getElementById('studentName').value || '匿名');
-    formData.append('student_class', document.getElementById('studentClass').value || '未知班级');
-    formData.append('tooth_type', document.getElementById('toothType').value);
-    const opTime = document.getElementById('opTime').value;
-    if (opTime) formData.append('operation_time', parseFloat(opTime) * 60);
-
-    try {
-        const resp = await fetch('/analyze_xray', { method: 'POST', body: formData });
-        const data = await resp.json();
-        if (data.error) { alert(data.error); return; }
-        renderResult(data);
-    } catch (err) {
-        alert('分析失败：' + err.message);
-    } finally {
-        loadingOverlay.classList.remove('show');
-        document.getElementById('uploadCard').style.opacity = '1';
-        resultCard.scrollIntoView({ behavior: 'smooth' });
-    }
-});
-
-function renderResult(data) {
-    resultCard.style.display = 'block';
-    const gradeClass = { '优秀':'excellent','良好':'good','中等':'mid','及格':'pass','不及格':'fail' }[data.grade] || 'pass';
-
-    let dimsHTML = data.dimensions.map((d, i) => {
-        let barClass = d.percentage >= 75 ? 'good' : (d.percentage >= 50 ? 'warning' : 'bad');
-        let icon = d.status === 'good' ? '✅' : (d.status === 'warning' ? '⚠️' : '❌');
-        let processHTML = d.process_analysis ?
-            `<div class="process-box" id="process-${i}" style="margin-left:24px;margin-bottom:10px;">
-                <div class="process-header" style="cursor:pointer;font-size:12px;color:#2B7BEC;margin-bottom:4px;" onclick="var el=document.getElementById('process-body-${i}');el.style.display=el.style.display==='none'?'block':'none';">
-                    📋 打分过程分析 <span id="toggle-icon-${i}" style="font-size:10px;">▲ 点击收起</span>
-                </div>
-                <div id="process-body-${i}">
-                    <pre style="white-space:pre-wrap;font-size:11px;color:#555;background:#f9fafb;padding:10px;border-radius:6px;line-height:1.5;margin:0;">${d.process_analysis}</pre>
-                    ${d.targeted_suggestion ? `<div style="background:#fff8e1;padding:10px;border-radius:6px;margin-top:6px;font-size:12px;border-left:3px solid #f39c12;">💡 <strong>改进建议：</strong>${d.targeted_suggestion}</div>` : ''}
-                </div>
-            </div>` : '';
-        return `<div class="dim-bar" style="margin-bottom:2px;">
-            <div class="label">${icon} ${d.name}</div>
-            <div class="bar-wrap"><div class="bar-fill ${barClass}" style="width:${d.percentage}%"></div></div>
-            <div class="dim-score">${d.score}/${d.max_score}</div>
-        </div>${processHTML}`;
-    }).join('');
-
-    let suggestionsHTML = data.suggestions && data.suggestions.length ? `
-        <div class="suggestion-box">
-            <h4>🔧 改进建议（按优先级）</h4>
-            <ol>${data.suggestions.map(s => `<li>${s}</li>`).join('')}</ol>
-        </div>` : '';
-
-    let overallHTML = data.overall_assessment ?
-        `<div style="background:#f0f7ff;padding:12px 16px;border-radius:8px;margin:12px 0;text-align:left;">
-            <strong>📝 整体评估：</strong>${data.overall_assessment}
-        </div>` : '';
-
-    let strengthsWeaknessesHTML = '';
-    if (data.strengths && data.strengths.length) {
-        strengthsWeaknessesHTML += `<div style="margin-top:8px;text-align:left;font-size:13px;color:#27ae60;">✅ 强项：${data.strengths.slice(0,3).join(' | ')}</div>`;
-    }
-    if (data.weaknesses && data.weaknesses.length) {
-        strengthsWeaknessesHTML += `<div style="margin-top:4px;text-align:left;font-size:13px;color:#e67e22;">⚠️ 弱项：${data.weaknesses.slice(0,3).join(' | ')}</div>`;
-    }
-
-    document.getElementById('resultContent').innerHTML = `
-        <div class="score-circle ${gradeClass}">
-            <span class="big">${data.total_score}</span>
-            <span class="small">/ ${data.max_total} · ${data.grade}</span>
-        </div>
-        <p style="color:#666;margin-bottom:8px;">共分析 ${data.photo_count} 张照片 · 点击分项可展开打分过程</p>
-        ${overallHTML}
-        ${strengthsWeaknessesHTML}
-        <div style="margin-top:12px;text-align:left;">${dimsHTML}</div>
-        ${suggestionsHTML}
-        <p style="margin-top:12px;font-size:12px;color:#999;">分析时间: ${data.timestamp} · 会话ID: ${data.session_id}</p>
-    `;
-}
-</script>
-</body>
-</html>
+function renderResult(data){
+resultCard.style.display='block';
+const gc={'优秀':'excellent','良好':'good','中等':'mid','及格':'pass','不及格':'fail'}[data.grade]||'pass';
+let dimsHTML=data.dimensions.map((d,i)=>{
+let bc=d.percentage>=75?'good':(d.percentage>=50?'warning':'bad');
+let icon=d.status==='good'?'✅':(d.status==='warning'?'⚠️':'❌');
+let processHTML=d.process_analysis?('<div class="process-box"><div style="cursor:pointer;font-size:12px;color:#e67e22;margin-bottom:4px" onclick="var el=document.getElementById(\'pb-'+i+'\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'">📋 评估过程分析 <span style="font-size:10px">▲ 点击收起</span></div><div id="pb-'+i+'"><pre>'+d.process_analysis+'</pre>'+(d.targeted_suggestion?'<div style="background:#fff8e1;padding:10px;border-radius:6px;margin-top:6px;font-size:12px;border-left:3px solid #f39c12">💡 <strong>临床建议：</strong>'+d.targeted_suggestion+'</div>':'')+'</div></div>'):'';
+return '<div class="dim-bar"><div class="label">'+icon+' '+d.name+'</div><div class="bar-wrap"><div class="bar-fill '+bc+'" style="width:'+d.percentage+'%"></div></div><div class="dim-score">'+d.score+'/'+d.max_score+'</div></div>'+processHTML}).join('');
+let sugHTML=data.suggestions&&data.suggestions.length?'<div class="suggestion-box"><h4>🔧 改进建议（按优先级）</h4><ol>'+data.suggestions.map(s=>'<li>'+s+'</li>').join('')+'</ol></div>':'';
+document.getElementById('resultContent').innerHTML='<div class="score-circle '+gc+'"><span class="big">'+data.total_score+'</span><span class="small">/ '+data.max_total+' · '+data.grade+'</span></div>'+(data.overall_assessment?'<div style="background:#f0f7ff;padding:12px;border-radius:8px;margin-bottom:12px;text-align:left"><strong>📝 </strong>'+data.overall_assessment+'</div>':'')+'<div style="text-align:left">'+dimsHTML+'</div>'+sugHTML+'<p style="margin-top:12px;font-size:12px;color:#999">'+data.timestamp+'</p>';
+}</script>
+</body></html>
