@@ -19,6 +19,8 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from io import BytesIO
 
 from scoring_engine_v2 import II类洞评分引擎V2, SCORING_CONFIG
+from scoring_endodontic import 开髓洞形评分引擎, SCORING_CONFIG as ENDO_CONFIG
+from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFIG
 
 # ── App Setup ──
 BASE_DIR = Path(__file__).parent.absolute()
@@ -46,6 +48,8 @@ for f in sorted(REPORT_FOLDER.glob('*.json')):
         pass
 
 engine = II类洞评分引擎V2()
+endo_engine = 开髓洞形评分引擎()
+xray_engine = 根管X光片评估引擎()
 
 
 def allowed_file(filename):
@@ -55,8 +59,26 @@ def allowed_file(filename):
 # ── Routes ──
 @app.route('/')
 def index():
-    """学生端首页 — 上传照片"""
+    """统一入口 — 三个模块选择"""
+    return render_template('home.html')
+
+
+@app.route('/class2')
+def class2_index():
+    """II类洞评分 — 学生端"""
     return render_template('index.html', config=SCORING_CONFIG)
+
+
+@app.route('/endo')
+def endo_index():
+    """开髓洞形评分 — 学生端"""
+    return render_template('endo.html', config=ENDO_CONFIG)
+
+
+@app.route('/xray')
+def xray_index():
+    """根管X光片评估 — 学生端"""
+    return render_template('xray.html', config=XRAY_CONFIG)
 
 
 @app.route('/analyze', methods=['POST'])
@@ -417,6 +439,76 @@ def static_files(filename):
 
 
 # ── Main ──
+@app.route('/analyze_endo', methods=['POST'])
+def analyze_endo():
+    """开髓洞形AI分析"""
+    if 'photos' not in request.files:
+        return jsonify({'error': '未上传照片'}), 400
+    files = request.files.getlist('photos')
+    saved_paths, session_id = [], uuid.uuid4().hex[:8]
+    for i, file in enumerate(files):
+        if file and allowed_file(file.filename):
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            fp = UPLOAD_FOLDER / f'endo_{session_id}_{i}_{int(time.time())}.{ext}'
+            file.save(str(fp)); saved_paths.append(str(fp))
+    if not saved_paths: return jsonify({'error': '无有效文件'}), 400
+    reports = [endo_engine.analyze(p) for p in saved_paths]
+    best = max(reports, key=lambda r: r.total_score)
+    dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
+             'percentage': round(d.score/d.max_score*100,1) if d.max_score>0 else 0,
+             'detail': d.detail, 'status': d.status,
+             'process_analysis': d.process_analysis, 'targeted_suggestion': d.targeted_suggestion}
+            for d in best.dimensions]
+    result = {'session_id': session_id, 'total_score': round(best.total_score,1),
+              'max_total': best.max_total, 'dimensions': dims,
+              'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
+                        '中等' if best.total_score>=70 else '及格' if best.total_score>=60 else '不及格'),
+              'suggestions': [d.targeted_suggestion for d in best.dimensions
+                             if d.status in ('warning','bad') and d.targeted_suggestion][:5],
+              'photo_count': len(saved_paths),
+              'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+              'overall_assessment': best.overall_assessment,
+              'strengths': best.strengths, 'weaknesses': best.weaknesses}
+    with open(REPORT_FOLDER / f'endo_{session_id}.json', 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    return jsonify(result)
+
+
+@app.route('/analyze_xray', methods=['POST'])
+def analyze_xray():
+    """根管X光片AI分析"""
+    if 'photos' not in request.files:
+        return jsonify({'error': '未上传X光片'}), 400
+    files = request.files.getlist('photos')
+    saved_paths, session_id = [], uuid.uuid4().hex[:8]
+    for i, file in enumerate(files):
+        if file and allowed_file(file.filename):
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            fp = UPLOAD_FOLDER / f'xray_{session_id}_{i}_{int(time.time())}.{ext}'
+            file.save(str(fp)); saved_paths.append(str(fp))
+    if not saved_paths: return jsonify({'error': '无有效文件'}), 400
+    reports = [xray_engine.analyze(p) for p in saved_paths]
+    best = max(reports, key=lambda r: r.total_score)
+    dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
+             'percentage': round(d.score/d.max_score*100,1) if d.max_score>0 else 0,
+             'detail': d.detail, 'status': d.status,
+             'process_analysis': d.process_analysis, 'targeted_suggestion': d.targeted_suggestion}
+            for d in best.dimensions]
+    result = {'session_id': session_id, 'total_score': round(best.total_score,1),
+              'max_total': best.max_total, 'dimensions': dims,
+              'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
+                        '中等' if best.total_score>=70 else '及格' if best.total_score>=60 else '不及格'),
+              'suggestions': [d.targeted_suggestion for d in best.dimensions
+                             if d.status in ('warning','bad') and d.targeted_suggestion][:5],
+              'photo_count': len(saved_paths),
+              'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+              'overall_assessment': best.overall_assessment,
+              'strengths': best.strengths, 'weaknesses': best.weaknesses}
+    with open(REPORT_FOLDER / f'xray_{session_id}.json', 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    return jsonify(result)
+
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5050))

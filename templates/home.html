@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>口腔AI评分系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:linear-gradient(135deg,#1B3A5C,#2B7BEC);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.container{max-width:800px;padding:40px}
+h1{color:#fff;font-size:32px;text-align:center;margin-bottom:8px}
+.sub{color:rgba(255,255,255,.7);text-align:center;font-size:15px;margin-bottom:40px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.card{background:#fff;border-radius:16px;padding:30px 20px;text-align:center;text-decoration:none;transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+.card:hover{transform:translateY(-4px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.card .icon{font-size:48px;margin-bottom:16px}
+.card h2{font-size:18px;color:#1B3A5C;margin-bottom:8px}
+.card p{font-size:13px;color:#999;line-height:1.6}
+.card .tag{display:inline-block;margin-top:12px;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600}
+.tag.class2{background:#d5f5e3;color:#27ae60}
+.tag.endo{background:#d6eaf8;color:#2B7BEC}
+.tag.xray{background:#fdebd0;color:#e67e22}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🦷 口腔AI评分系统</h1>
+<div class="sub">口腔内科学实训 · AI辅助操作评分</div>
+<div class="cards">
+<a href="/class2" class="card">
+<div class="icon">🦷</div>
+<h2>II类洞制备评分</h2>
+<p>窝洞制备外形·鸠尾峡·洞深·底平壁直·点线角·光滑度</p>
+<span class="tag class2">10维度量化</span>
+</a>
+<a href="/endo" class="card">
+<div class="icon">🔍</div>
+<h2>开髓洞形评分</h2>
+<p>开髓位置·轮廓·髓室顶揭除·根管口暴露·穿孔检测</p>
+<span class="tag endo">10维度量化</span>
+</a>
+<a href="/xray" class="card">
+<div class="icon">🩻</div>
+<h2>根管充填X光片评估</h2>
+<p>充填长度·致密度·锥度·空隙检测·根尖封闭</p>
+<span class="tag xray">7维度量化</span>
+</a>
+</div>
+</div>
+</body>
+</html>
