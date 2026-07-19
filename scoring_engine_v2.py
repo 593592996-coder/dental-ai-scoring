@@ -869,8 +869,8 @@ class II类洞评分引擎V2:
 
         h, w = image.shape[:2]
         max_dim = max(h, w)
-        if max_dim > 1200:
-            scale = 1200 / max_dim
+        if max_dim > 600:
+            scale = 600 / max_dim
             image = cv2.resize(image, (int(w * scale), int(h * scale)))
 
         self.calibration_scale = self.detect_scale_marker(image)
