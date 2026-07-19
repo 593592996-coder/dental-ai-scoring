@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评分报告 — {{ report.student_name }}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Microsoft YaHei',sans-serif; background:#f0f4f8; padding:20px; }
+        .report { max-width:800px; margin:0 auto; background:#fff; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,.1); }
+        .report h1 { font-size:24px; color:#1B3A5C; text-align:center; margin-bottom:4px; }
+        .report .subtitle { text-align:center; color:#999; font-size:13px; margin-bottom:20px; }
+        .score-circle { width:140px; height:140px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:16px auto; }
+        .score-circle .big { font-size:42px; font-weight:700; color:#fff; }
+        .score-circle .small { font-size:14px; color:rgba(255,255,255,.85); }
+        .meta { text-align:center; color:#666; font-size:14px; margin-bottom:20px; }
+        .section { margin:20px 0; padding:16px; background:#fafbfc; border-radius:8px; }
+        .section h3 { font-size:15px; color:#1B3A5C; margin-bottom:10px; }
+        .dim { display:flex; align-items:center; margin:6px 0; }
+        .dim .name { width:100px; font-size:13px; text-align:right; padding-right:10px; }
+        .dim .bar { flex:1; height:20px; background:#eee; border-radius:10px; overflow:hidden; }
+        .dim .fill { height:100%; border-radius:10px; }
+        .dim .val { width:60px; font-size:12px; padding-left:8px; }
+        .problem { background:#fff5f5; border-left:3px solid #c0392b; padding:8px 12px; margin:6px 0; font-size:13px; }
+        .suggestion { background:#fff8e1; border-left:3px solid #f39c12; padding:8px 12px; margin:4px 0; font-size:13px; }
+        .btn-print { display:block; width:200px; margin:20px auto 0; padding:12px; background:#2B7BEC; color:#fff; border:none; border-radius:8px; font-size:15px; cursor:pointer; }
+        @media print { .btn-print { display:none; } body { background:#fff; } }
+    </style>
+</head>
+<body>
+<div class="report">
+    <h1>🦷 II类洞制备 AI评分报告</h1>
+    <p class="subtitle">AI评分系统 v1.0 · {{ report.timestamp }}</p>
+
+    <div class="score-circle" style="background:{% if report.grade == '优秀' %}#27ae60{% elif report.grade == '良好' %}#2B7BEC{% elif report.grade == '中等' %}#f39c12{% elif report.grade == '及格' %}#e67e22{% else %}#c0392b{% endif %};">
+        <span class="big">{{ report.total_score }}</span>
+        <span class="small">/ {{ report.max_total }} · {{ report.grade }}</span>
+    </div>
+    <p class="meta">{{ report.student_name }} · {{ report.student_class }} · 分析{{ report.photo_count }}张照片</p>
+
+    <div class="section">
+        <h3>📊 分项得分</h3>
+        {% for d in report.dimensions %}
+        <div class="dim">
+            <div class="name">{% if d.status == 'good' %}✅{% elif d.status == 'warning' %}⚠️{% else %}❌{% endif %} {{ d.name }}</div>
+            <div class="bar"><div class="fill" style="width:{{ d.percentage }}%;background:{% if d.status == 'good' %}#27ae60{% elif d.status == 'warning' %}#f39c12{% else %}#c0392b{% endif %};"></div></div>
+            <div class="val">{{ d.score }}/{{ d.max_score }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if report.problem_areas %}
+    <div class="section">
+        <h3>🔍 问题定位</h3>
+        {% for p in report.problem_areas %}
+        <div class="problem">{{ p.detail }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if report.suggestions %}
+    <div class="section">
+        <h3>🔧 改进建议</h3>
+        {% for s in report.suggestions %}
+        <div class="suggestion">{{ loop.index }}. {{ s }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <button class="btn-print" onclick="window.print()">🖨 打印报告</button>
+</div>
+</body>
+</html>
