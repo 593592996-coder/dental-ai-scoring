@@ -48,26 +48,19 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 .back-link{display:block;text-align:center;margin-top:20px;color:#2B7BEC;text-decoration:none;font-size:14px}
 </style></head>
 <body>
-<div class="header"><h1>🔍 开髓洞形制备 AI评分系统</h1><p>拍照上传→AI分析→即时评分报告</p></div>
+<div class="header"><h1>🔍 开髓术 AI评分系统</h1><p>拍照上传→AI自动评估开髓结果→即时评分</p></div>
 <div class="container">
 <a href="/" class="back-link">← 返回首页</a><br>
 <div class="card" id="uploadCard">
 <h2>📸 上传开髓洞形照片</h2>
 <div class="form-group"><label>学生姓名</label><input type="text" id="studentName" placeholder="请输入姓名"></div>
 <div class="form-group"><label>班级</label><input type="text" id="studentClass" value="25口腔1班"></div>
-<div class="form-group"><label>牙位</label>
-<select id="toothType" style="width:100%;padding:10px 14px;border:1.5px solid #dde;border-radius:8px;font-size:14px">
-<option value="molar">🦷 磨牙（三角形开髓洞形）</option>
-<option value="premolar">🦷 前磨牙（卵圆形开髓洞形）</option>
-<option value="anterior">🦷 前牙（椭圆形·舌侧开髓）</option>
-</select></div>
-<div class="upload-zone" id="uploadZone"><div class="icon">📷</div><div class="text">点击上传或拖拽照片到此处</div><div class="hint">支持JPG/PNG，建议拍摄颌面正位照片（清晰显示开髓洞形）</div><input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
+<div class="upload-zone" id="uploadZone"><div class="icon">📷</div><div class="text">点击上传或拖拽照片到此处</div><div class="hint">上传2张照片：①颌面正位(开髓完成) ②洞底特写(插入K锉)</div><input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
 <div class="preview-grid" id="previewGrid"></div>
 <div style="margin-top:16px"><button class="btn btn-primary" id="analyzeBtn" disabled>🔍 开始AI分析</button></div>
 <div class="photo-guide" style="margin-top:16px">
-<div class="guide-item"><span class="num">1</span><br>颌面正位<br>含参考标尺</div>
-<div class="guide-item"><span class="num">2</span><br>45°斜位<br>查看洞壁外展</div>
-<div class="guide-item"><span class="num">3</span><br>洞底特写<br>根管口暴露</div>
+<div class="guide-item"><span class="num">1</span><br>颌面正位<br>完整开髓洞形</div>
+<div class="guide-item"><span class="num">2</span><br>洞底插K锉<br>根管口定位确认</div>
 </div>
 </div>
 <div class="card result-area" id="resultCard"><h2>📊 AI评分报告</h2><div style="text-align:center" id="resultContent"></div>
