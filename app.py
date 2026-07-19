@@ -249,12 +249,11 @@ def static_files(filename):
 
 # ── Main ──
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5050))
     print('=' * 60)
     print('  II类洞AI评分系统 v1.0')
     print('  学生端: http://localhost:5050/')
     print('  教师端: http://localhost:5050/dashboard')
     print('=' * 60)
-    if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 5050))
     app.run(debug=False, host='0.0.0.0', port=port)
