@@ -21,6 +21,7 @@ from io import BytesIO
 from scoring_engine_v2 import II类洞评分引擎V2, SCORING_CONFIG
 from scoring_endodontic import 开髓术评分引擎, SCORING_CONFIG as ENDO_CONFIG
 from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFIG
+from cases_consult import CASES as CONSULT_CASES
 
 # ── App Setup ──
 BASE_DIR = Path(__file__).parent.absolute()
@@ -79,6 +80,136 @@ def endo_index():
 def xray_index():
     """根管X光片评估 — 学生端"""
     return render_template('xray.html', config=XRAY_CONFIG)
+
+
+# ═══════════════════════════════
+# 模拟诊疗问诊系统路由
+# ═══════════════════════════════
+@app.route('/consult')
+def consult_index():
+    return render_template('consult.html', cases=CONSULT_CASES)
+
+@app.route('/api/consult/cases')
+def consult_list_cases():
+    return jsonify({cid: {'id': cid, 'title': c['title'], 'difficulty': c['difficulty'],
+                          'patient': c['patient']} for cid, c in CONSULT_CASES.items()})
+
+@app.route('/api/consult/start/<case_id>', methods=['POST'])
+def consult_start(case_id):
+    if case_id not in CONSULT_CASES: return jsonify({'error': '病例不存在'}), 404
+    c = CONSULT_CASES[case_id]
+    session['consult_case_id'] = case_id
+    session['consult_phase'] = 1
+    session['consult_history_done'] = []
+    session['consult_exam_done'] = []
+    session['consult_exam_score'] = 0
+    return jsonify({'introduction': c['introduction'], 'patient': c['patient'], 'phase': 1})
+
+@app.route('/api/consult/history/ask', methods=['POST'])
+def consult_history_ask():
+    case_id = session.get('consult_case_id')
+    if not case_id: return jsonify({'error': '请先选择病例'}), 400
+    c = CONSULT_CASES[case_id]
+    data = request.get_json()
+    key = data.get('key', '')
+    for section in c['history']['sections']:
+        for q in section['questions']:
+            if q['key'] == key:
+                done = list(set(session.get('consult_history_done', []) + [key]))
+                session['consult_history_done'] = done
+                return jsonify({'answer': q['answer'], 'done': len(done)})
+    return jsonify({'answer': '无法回答此问题'})
+
+@app.route('/api/consult/history/done', methods=['POST'])
+def consult_history_done():
+    case_id = session.get('consult_case_id')
+    if not case_id: return jsonify({'error': '请先选择病例'}), 400
+    c = CONSULT_CASES[case_id]
+    session['consult_phase'] = 2
+    return jsonify({'message': c['history'].get('completion_prompt', ''), 'instruments': c['examination']['available_instruments'], 'phase': 2})
+
+@app.route('/api/consult/exam/finding', methods=['POST'])
+def consult_exam_finding():
+    case_id = session.get('consult_case_id')
+    if not case_id: return jsonify({'error': '请先选择病例'}), 400
+    c = CONSULT_CASES[case_id]
+    data = request.get_json()
+    item = data.get('item', '')
+    findings = c['examination']['findings']
+    if item in findings:
+        done = list(set(session.get('consult_exam_done', []) + [item]))
+        session['consult_exam_done'] = done
+        scoring = c['examination']['examination_order']['scoring']
+        pts = scoring.get(item, 0)
+        session['consult_exam_score'] = session.get('consult_exam_score', 0) + pts
+        return jsonify({'finding': findings[item]['detail'], 'key': findings[item].get('key', ''), 'done': done, 'points': pts})
+    return jsonify({'finding': '未找到该检查项目'})
+
+@app.route('/api/consult/exam/done', methods=['POST'])
+def consult_exam_done():
+    session['consult_phase'] = 3
+    case_id = session.get('consult_case_id')
+    c = CONSULT_CASES[case_id]
+    return jsonify({'phase': 3, 'key_findings': c['examination']['key_positive_findings']})
+
+@app.route('/api/consult/record/submit', methods=['POST'])
+def consult_submit_record():
+    case_id = session.get('consult_case_id')
+    if not case_id: return jsonify({'error': '请先选择病例'}), 400
+    c = CONSULT_CASES[case_id]
+    data = request.get_json()
+    rec = c['medical_record']
+    student_diag = data.get('diagnosis', '')
+    # 诊断评分
+    correct = rec['diagnosis']['correct']; acceptable = rec['diagnosis'].get('acceptable', [])
+    if student_diag.strip() == correct: diag_score = 100
+    elif any(a in student_diag or student_diag in a for a in acceptable): diag_score = 75
+    else:
+        kw_s = set(student_diag.replace('，',',').replace(' ','').split(','))
+        kw_c = set(correct.replace('，',',').replace(' ','').split(','))
+        overlap = len(kw_s & kw_c) / max(len(kw_c), 1)
+        diag_score = int(max(10, overlap * 70))
+    # 鉴别诊断
+    student_diff = data.get('differential', '')
+    diff_correct = rec.get('differential', {}).get('correct', []) if isinstance(rec.get('differential'), dict) else []
+    diff_score = sum(33 for d in diff_correct if d in student_diff) if diff_correct else 80
+    diff_score = min(100, diff_score)
+    # 治疗计划
+    student_tx = data.get('treatment_plan', '')
+    tx_score = 60
+    for kw, pts in {'根管治疗':20,'开髓':10,'充填':10,'修复':10,'全冠':10,'卫生宣教':5,'复查':5,'戒烟':5,'活髓':15,'盖髓':15}.items():
+        if kw in student_tx: tx_score += pts
+    tx_score = min(100, tx_score)
+    # 检查
+    exam_s = session.get('consult_exam_score', 0)
+    exam_max = sum(c['examination']['examination_order']['scoring'].values())
+    exam_pct = min(100, int(exam_s / exam_max * 100)) if exam_max > 0 else 70
+    total = int(diag_score * 0.35 + diff_score * 0.15 + tx_score * 0.20 + exam_pct * 0.15 + 80 * 0.15)
+
+    # 病历
+    p = c['patient']; intro = c['introduction']
+    record = f"""════════════════════════════════════
+           口腔门诊病历
+════════════════════════════════════
+姓名: {p['name']}  性别: {p['gender']}  年龄: {p['age']}岁
+职业: {p['occupation']}
+
+【主诉】{intro['chief_complaint']}
+
+【影像学检查】
+{chr(10).join(f'{img["label"]}: {img["desc"]}' for img in intro['images'])}
+
+【诊断】{correct}
+【鉴别诊断】{', '.join(diff_correct) if diff_correct else ''}
+【治疗计划】{chr(10).join('  '+t for t in rec['treatment_plan']['correct'])}
+【处置】{rec['procedure']['correct']}
+【医嘱】{chr(10).join('  · '+o for o in rec['orders']['correct'])}
+医师: __________  日期: __________"""
+
+    return jsonify({'scores': {'diagnosis': diag_score, 'differential': diff_score, 'treatment': tx_score, 'examination': exam_pct, 'total': total},
+                    'correct': {'diagnosis': correct, 'differential': diff_correct, 'treatment_plan': rec['treatment_plan']['correct'],
+                                'procedure': rec['procedure']['correct'], 'orders': rec['orders']['correct']},
+                    'record': record})
 
 
 @app.route('/analyze', methods=['POST'])

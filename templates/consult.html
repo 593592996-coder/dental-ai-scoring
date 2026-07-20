@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>口腔AI模拟诊疗</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:20px}.header .info{font-size:13px;opacity:.85}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+/* 进度条 */
+.phases{display:flex;gap:0;margin-bottom:16px;background:#fff;border-radius:12px;overflow:hidden}
+.phase-tab{flex:1;padding:14px 10px;text-align:center;font-size:13px;font-weight:600;background:#f5f5f5;color:#999;cursor:pointer;transition:.3s;border:none}
+.phase-tab.active{background:linear-gradient(135deg,#2B7BEC,#1B3A5C);color:#fff}
+.phase-tab.done{background:#d5f5e3;color:#27ae60}
+.phase-tab .num{display:inline-block;width:22px;height:22px;line-height:22px;border-radius:50%;font-size:12px;margin-right:4px}
+.phase-tab.active .num{background:rgba(255,255,255,.3)}
+/* 主内容 */
+.main{display:flex;gap:16px}
+.panel{flex:1;background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);min-height:400px}
+.panel h3{font-size:16px;color:#1B3A5C;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #2B7BEC}
+/* 病例引入 */
+.intro-box{background:linear-gradient(135deg,#fef9e7,#fff8e1);border:1.5px solid #f9e79f;border-radius:10px;padding:14px;margin-bottom:14px}
+.intro-box .complaint{font-size:16px;font-weight:700;color:#e67e22;margin-bottom:8px}
+.intro-box .complaint:before{content:'🦷 主诉: '}
+.image-desc{background:#f5f5f5;border-radius:8px;padding:10px;margin-top:6px;font-size:12px;color:#555}
+.image-desc strong{color:#1B3A5C}
+/* 对话 */
+.chat{max-height:300px;overflow-y:auto;margin-bottom:14px}
+.msg{margin:8px 0;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5;animation:fade .3s}
+.msg.pt{background:#fff;border:1.5px solid #e0e0e0;margin-right:40px}
+.msg.st{background:linear-gradient(135deg,#2B7BEC,#1B3A5C);color:#fff;margin-left:40px}
+.msg.sys{background:#e8f0fe;text-align:center;font-size:12px;margin:0 40px}
+@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+/* 按钮 */
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.q-btn{padding:8px 16px;border:1.5px solid #dde;border-radius:8px;background:#fff;cursor:pointer;font-size:12px;transition:.2s}
+.q-btn:hover{background:#e8f0fe;border-color:#2B7BEC}
+.q-btn.used{opacity:.3;pointer-events:none}
+.section-title{font-size:12px;color:#999;font-weight:600;margin:8px 0 4px;width:100%}
+/* 检查项 */
+.exam-card{background:#f9fafb;border:1.5px solid #e0e0e0;border-radius:8px;padding:10px;margin:6px 0;cursor:pointer;transition:.2s}
+.exam-card:hover{background:#e8f0fe;border-color:#2B7BEC}
+.exam-card.done{background:#e8f8f0;border-color:#27ae60}
+.exam-card .finding{font-size:12px;color:#555;margin-top:6px;display:none;padding:8px;background:#fff;border-radius:6px}
+.exam-card.done .finding{display:block}
+.key-point{display:inline-block;padding:2px 8px;background:#fef9e7;color:#e67e22;border-radius:4px;font-size:11px;margin-top:4px}
+/* 病历输入 */
+.record-section{margin-bottom:14px}
+.record-section label{display:block;font-size:13px;font-weight:600;color:#1B3A5C;margin-bottom:4px}
+.record-section input,.record-section textarea{width:100%;padding:10px;border:1.5px solid #dde;border-radius:8px;font-size:13px;font-family:inherit}
+.record-section textarea{min-height:60px;resize:vertical}
+/* 按钮 */
+.btn{padding:10px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:.3s}
+.btn-primary{background:linear-gradient(135deg,#2B7BEC,#1B3A5C);color:#fff}
+.btn-success{background:#27ae60;color:#fff}
+.btn-next{background:linear-gradient(135deg,#e67e22,#d35400);color:#fff;float:right}
+/* 结果 */
+.result-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:999;align-items:center;justify-content:center}
+.result-overlay.show{display:flex}
+.result-card{background:#fff;border-radius:16px;padding:24px;max-width:750px;width:95%;max-height:85vh;overflow-y:auto}
+.result-card h2{text-align:center;margin-bottom:16px}
+.scores{display:flex;justify-content:center;gap:20px;margin-bottom:16px}
+.score-item{text-align:center}.score-item .val{font-size:32px;font-weight:700}.score-item .lbl{font-size:11px;color:#999}
+.record{background:#f9fafb;border-radius:8px;padding:14px;font-size:12px;line-height:1.8;white-space:pre-wrap;max-height:300px;overflow-y:auto}
+.case-select{padding:40px;text-align:center}.case-card{display:inline-block;width:240px;margin:10px;padding:20px;background:#fff;border-radius:12px;cursor:pointer;transition:.3s;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.case-card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.case-card h3{font-size:15px;margin-bottom:6px}
+</style></head>
+<body>
+<div class="header"><h1>🩺 口腔AI模拟诊疗</h1><span class="info" id="headerInfo"></span></div>
+<div class="container">
+<div id="caseSelectArea"><div class="case-select"><h3 style="margin-bottom:16px">选择病例开始模拟诊疗</h3><div id="caseCards"></div></div></div>
+
+<div id="consultArea" style="display:none">
+<div class="phases">
+<button class="phase-tab active" id="tab1" onclick="switchPhase(1)"><span class="num">1</span>病史采集</button>
+<button class="phase-tab" id="tab2" onclick="switchPhase(2)"><span class="num">2</span>口腔检查</button>
+<button class="phase-tab" id="tab3" onclick="switchPhase(3)"><span class="num">3</span>病历书写</button>
+</div>
+<div class="main">
+<div class="panel" id="phaseContent"></div>
+</div>
+</div>
+</div>
+
+<div class="result-overlay" id="resultOverlay"><div class="result-card" id="resultCard"></div></div>
+
+<script>
+let currentCase=null,currentPhase=1,caseData=null,examDone=[],examPoints=0,orderScore=0;
+let maxExamPoints=0;
+
+// 加载病例列表
+fetch('/api/consult/cases').then(r=>r.json()).then(cases=>{
+  let html='';
+  for(let cid in cases){let c=cases[cid];html+=`<div class="case-card" onclick="startCase('${cid}')"><h3>${c.title}</h3><p style="font-size:13px;color:#666">${c.patient.name}·${c.patient.gender}·${c.patient.age}岁</p><p style="font-size:12px;margin-top:4px;color:#999">${c.difficulty}</p></div>`}
+  document.getElementById('caseCards').innerHTML=html;
+});
+
+async function startCase(cid){
+  let resp=await fetch('/api/consult/start/'+cid,{method:'POST'});caseData=await resp.json();
+  currentCase=cid;currentPhase=1;examDone=[];examPoints=0;orderScore=0;
+  document.getElementById('caseSelectArea').style.display='none';
+  document.getElementById('consultArea').style.display='block';
+  document.getElementById('headerInfo').textContent=caseData.patient.name+' | '+caseData.patient.gender+' '+caseData.patient.age+'岁';
+  renderPhase();
+}
+
+function switchPhase(p){
+  if(p>currentPhase) return; // 不能跳到未完成的阶段
+  // 如果当前是阶段1且要切换，先完成阶段1
+  if(currentPhase===1 && p>1 && !document.getElementById('phaseContent').querySelector('.phase1-done')){
+    return;
+  }
+  renderPhase(p);
+}
+
+async function renderPhase(phaseOverride){
+  let p=phaseOverride||currentPhase;
+  updateTabs(p);
+  if(p===1) renderPhase1();
+  else if(p===2) renderPhase2();
+  else if(p===3) renderPhase3();
+}
+
+function updateTabs(active){
+  for(let i=1;i<=3;i++){
+    let tab=document.getElementById('tab'+i);
+    tab.className='phase-tab';
+    if(i===active) tab.classList.add('active');
+    if(i<currentPhase) tab.classList.add('done');
+  }
+}
+
+// ═══════════════════ 阶段1: 病史采集 ═══════════════════
+function renderPhase1(){
+  let intro=caseData.introduction;
+  let html=`<div class="intro-box"><div class="complaint">${intro.chief_complaint}</div>`;
+  for(let img of intro.images){
+    html+=`<div class="image-desc"><strong>📷 ${img.label}:</strong> ${img.desc}</div>`;
+  }
+  html+=`</div><div class="chat" id="historyChat"></div><div id="historyBtns"></div>`;
+
+  // 如果后端有sections数据
+  let sections=[];
+  fetch('/api/consult/cases').then(r=>r.json()).then(cases=>{
+    // 从session获取sections需要额外的API
+  });
+
+  // 直接渲染问题按钮
+  html+=`<div id="historyActions"><div class="btn-row" id="historyBtnRow"></div>`;
+  html+=`<button class="btn btn-next" onclick="finishPhase1()">进入口腔检查 →</button></div></div>`;
+
+  document.getElementById('phaseContent').innerHTML=html;
+
+  // 加载问题
+  fetch('/api/consult/start/'+currentCase,{method:'POST'}).then(r=>r.json()).then(d=>{
+    // 用session中的数据
+  });
+
+  // 直接用已知的3个cases的问题结构
+  loadHistoryQuestions();
+}
+
+function loadHistoryQuestions(){
+  // 根据caseId加载对应的问诊问题
+  let questions=[];
+  if(currentCase==='case001'){
+    questions=[
+      {section:'主诉采集',items:[
+        {key:'location',text:'具体哪个位置/牙位？'},
+        {key:'duration',text:'什么时候开始的？多久了？'},
+        {key:'trigger',text:'什么情况加重/缓解？'},
+      ]},
+      {section:'现病史',items:[
+        {key:'pain_character',text:'疼痛是什么性质的？'},
+        {key:'spontaneous_pain',text:'有自发痛/夜间痛吗？'},
+        {key:'medication',text:'吃过什么药？效果如何？'},
+      ]},
+      {section:'既往史',items:[
+        {key:'medical_history',text:'有什么全身疾病？'},
+        {key:'medication_history',text:'在吃什么药？'},
+        {key:'allergy',text:'过敏史？'},
+        {key:'dental_history',text:'口腔治疗史？'},
+        {key:'habits',text:'吸烟/饮酒？'},
+      ]},
+    ];
+  } else if(currentCase==='case002'){
+    questions=[
+      {section:'主诉采集',items:[
+        {key:'trauma_time',text:'什么时候受的伤？'},
+        {key:'trauma_cause',text:'怎么受伤的？'},
+        {key:'symptoms',text:'现在有什么不舒服？'},
+      ]},
+      {section:'既往史',items:[
+        {key:'medical_history',text:'全身健康状况？'},
+        {key:'allergy',text:'过敏史？'},
+        {key:'dental_history',text:'看过牙吗？'},
+      ]},
+    ];
+  } else if(currentCase==='case003'){
+    questions=[
+      {section:'主诉采集',items:[
+        {key:'duration',text:'这个包多久了？反复吗？'},
+        {key:'pain',text:'疼不疼？'},
+        {key:'trigger2',text:'以前治过吗？'},
+      ]},
+      {section:'既往史',items:[
+        {key:'medical_history',text:'全身状况？'},
+        {key:'allergy',text:'过敏史？'},
+      ]},
+    ];
+  }
+
+  let btnHTML='';
+  for(let group of questions){
+    btnHTML+=`<div class="section-title">📌 ${group.section}</div>`;
+    for(let item of group.items){
+      btnHTML+=`<button class="q-btn" id="qbtn-${item.key}" onclick="askHistory('${item.key}')">${item.text}</button>`;
+    }
+  }
+  document.getElementById('historyBtnRow').innerHTML=btnHTML;
+}
+
+async function askHistory(key){
+  let resp=await fetch('/api/consult/history/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});
+  let data=await resp.json();
+  let chat=document.getElementById('historyChat');
+  chat.innerHTML+=`<div class="msg st">🩺 ${document.getElementById('qbtn-'+key)?.textContent||key}</div>`;
+  chat.innerHTML+=`<div class="msg pt">🏥 ${data.answer}</div>`;
+  chat.scrollTop=chat.scrollHeight;
+  document.getElementById('qbtn-'+key).classList.add('used');
+}
+
+async function finishPhase1(){
+  let resp=await fetch('/api/consult/history/done',{method:'POST'});await resp.json();
+  currentPhase=2;
+  // 初始化检查分数
+  if(currentCase==='case001') maxExamPoints=7;
+  else if(currentCase==='case002') maxExamPoints=7;
+  else maxExamPoints=5.5;
+  renderPhase();
+}
+
+// ═══════════════════ 阶段2: 口腔检查 ═══════════════════
+function renderPhase2(){
+  let examItems=[];
+  if(currentCase==='case001'){
+    examItems=['视诊','探诊','叩诊','冷测','热测','牙髓电活力测试','X线片判读','牙周探诊'];
+  } else if(currentCase==='case002'){
+    examItems=['视诊','探诊','叩诊','松动度检查','冷测','牙髓电活力测试','X线片判读'];
+  } else if(currentCase==='case003'){
+    examItems=['视诊','探诊(充填体+瘘管)','叩诊','牙髓电活力测试','牙周探诊','X线片判读'];
+  }
+
+  let html=`<h3>🔬 口腔检查</h3><p style="font-size:13px;color:#999;margin-bottom:10px">点击每项检查获取临床发现。建议按正确顺序进行检查。</p>`;
+  html+=`<div class="btn-row"><span class="section-title">📌 检查项目（建议按顺序点击）</span>`;
+  for(let item of examItems){
+    let done=examDone.includes(item);
+    html+=`<button class="q-btn${done?' used':''}" id="exam-btn-${item.replace(/[^a-zA-Z0-9一-龥]/g,'')}" onclick="doExam('${item}')"${done?' disabled':''}>${done?'✅ ':''}${item}</button>`;
+  }
+  html+=`</div><div id="examFindings" style="margin-top:12px"></div>`;
+  html+=`<button class="btn btn-next" onclick="finishPhase2()" style="margin-top:10px">进入病历书写 →</button>`;
+  document.getElementById('phaseContent').innerHTML=html;
+  // 恢复已完成的检查结果
+  for(let item of examDone) showExamFinding(item);
+}
+
+async function doExam(item){
+  let resp=await fetch('/api/consult/exam/finding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item})});
+  let data=await resp.json();
+  if(!examDone.includes(item)){
+    examDone.push(item);
+    examPoints+=data.points;
+  }
+  document.getElementById('exam-btn-'+item.replace(/[^a-zA-Z0-9一-龥]/g,'')).classList.add('used');
+  document.getElementById('exam-btn-'+item.replace(/[^a-zA-Z0-9一-龥]/g,'')).textContent='✅ '+item;
+  showExamFinding(item, data.finding, data.key);
+}
+
+function showExamFinding(item, finding, key){
+  let div=document.createElement('div');
+  div.className='exam-card done';
+  div.id='find-'+item.replace(/[^a-zA-Z0-9一-龥]/g,'');
+  div.innerHTML=`<strong>🔬 ${item}</strong><div class="finding">${finding}${key?`<br><span class="key-point">🔑 ${key}</span>`:''}</div>`;
+  document.getElementById('examFindings').appendChild(div);
+}
+
+async function finishPhase2(){
+  await fetch('/api/consult/exam/done',{method:'POST'});
+  currentPhase=3;renderPhase();
+}
+
+// ═══════════════════ 阶段3: 病历书写 ═══════════════════
+function renderPhase3(){
+  let html=`<h3>📝 病历书写</h3>
+<div class="record-section"><label>诊断（包含牙位+疾病类型）</label><input id="diagInput" placeholder="如：36慢性牙髓炎急性发作"></div>
+<div class="record-section"><label>鉴别诊断（用逗号分隔）</label><input id="diffInput" placeholder="如：急性根尖周炎, 急性龈乳头炎, 三叉神经痛"></div>
+<div class="record-section"><label>治疗计划（每行一项）</label><textarea id="txInput" placeholder="1. 36根管治疗术&#10;2. 36全冠修复&#10;3. ..."></textarea></div>
+<button class="btn btn-success" onclick="submitRecord()" style="width:100%">📋 提交病历并查看评分</button>`;
+  document.getElementById('phaseContent').innerHTML=html;
+}
+
+async function submitRecord(){
+  let diag=document.getElementById('diagInput').value.trim();
+  let diff=document.getElementById('diffInput').value.trim();
+  let tx=document.getElementById('txInput').value.trim();
+  if(!diag){alert('请输入诊断');return}
+
+  let resp=await fetch('/api/consult/record/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({diagnosis:diag,differential:diff,treatment_plan:tx})});
+  let data=await resp.json();
+
+  document.getElementById('headerInfo').textContent+=' | 总分:'+data.scores.total+'分';
+
+  document.getElementById('resultCard').innerHTML=`
+    <h2>📊 模拟诊疗评估报告</h2>
+    <div class="scores">
+      <div class="score-item"><div class="val" style="color:#2B7BEC">${data.scores.diagnosis}</div><div class="lbl">诊断准确度</div></div>
+      <div class="score-item"><div class="val" style="color:#27ae60">${data.scores.differential}</div><div class="lbl">鉴别诊断</div></div>
+      <div class="score-item"><div class="val" style="color:#e67e22">${data.scores.treatment}</div><div class="lbl">治疗计划</div></div>
+      <div class="score-item"><div class="val" style="color:#8e44ad">${data.scores.examination}</div><div class="lbl">检查规范</div></div>
+    </div>
+    <p style="text-align:center;margin-bottom:8px;font-size:15px">✅ 标准诊断: <strong>${data.correct.diagnosis}</strong></p>
+    <p style="text-align:center;margin-bottom:12px;font-size:13px;color:#666">鉴别诊断: ${(data.correct.differential||[]).join(', ')}</p>
+    <h4 style="color:#1B3A5C;margin-bottom:6px">📋 标准治疗计划</h4>
+    <div style="font-size:12px;color:#555;margin-bottom:10px">${(data.correct.treatment_plan||[]).map(t=>'<div>· '+t+'</div>').join('')}</div>
+    <h4 style="color:#1B3A5C;margin-bottom:6px">🔧 标准处置</h4>
+    <div style="font-size:12px;color:#555;margin-bottom:10px;white-space:pre-wrap">${data.correct.procedure||''}</div>
+    <h4 style="color:#1B3A5C;margin-bottom:6px">💊 标准医嘱</h4>
+    <div style="font-size:12px;color:#555;margin-bottom:12px">${(data.correct.orders||[]).map(o=>'<div>· '+o+'</div>').join('')}</div>
+    <details><summary style="cursor:pointer;font-size:14px;color:#2B7BEC">📋 生成的电子病历</summary>
+    <div class="record">${data.record.replace(/\n/g,'<br>')}</div></details>
+  `;
+  document.getElementById('resultOverlay').classList.add('show');
+}
+</script>
+</body></html>
