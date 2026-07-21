@@ -145,7 +145,7 @@ def consult_chat():
     student_input = data.get('message', '').strip()
     if not student_input:
         return jsonify({'reply': '请描述你想了解的情况。', 'coverage': len(session.get('consult_history_log', []))})
-    # 关键词匹配（最佳匹配策略）
+    # 关键词匹配（最佳匹配策略 — 双向子串匹配）
     conv = c['conversation']
     best_answer = None
     best_keywords = ''
@@ -154,7 +154,7 @@ def consult_chat():
         ks = keywords.split('|')
         score = 0
         for k in ks:
-            if k in student_input:
+            if k in student_input or student_input in k:
                 score += 1 + len(k) * 0.1
         if score > best_score:
             best_score = score
