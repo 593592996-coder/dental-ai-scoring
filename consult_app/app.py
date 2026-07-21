@@ -67,9 +67,10 @@ def chat():
     if not student_input:
         return jsonify({'reply': '请描述你想了解的情况。', 'coverage': len(session.get('history_log',[]))})
 
-    # 关键词匹配（最佳匹配策略 — 找匹配度最高的，而非第一个命中的）
+    # 关键词匹配（最佳匹配策略）
     conv = c['conversation']
     best_answer = None
+    best_keywords = ''
     best_score = 0
 
     for keywords, answer in conv.items():
@@ -88,7 +89,6 @@ def chat():
         matched_kws = [k for k in best_keywords.split('|') if k in student_input]
     else:
         matched_kws = []
-        best_keywords = ''
         # 记录未匹配问题
         unmatched_file = os.path.join(LOG_DIR, 'unmatched_questions.json')
         try:

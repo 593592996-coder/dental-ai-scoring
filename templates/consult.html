@@ -84,14 +84,14 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 let caseId=null,caseInfo=null,phase=1,examItems=[],examSeq=[],examIdx=0,examDone={},examTotalScore=0;
 
 // 加载病例列表
-fetch('/api/cases').then(r=>r.json()).then(cases=>{
+fetch('/api/consult/cases').then(r=>r.json()).then(cases=>{
   let html='';
   for(let cid in cases){let c=cases[cid];html+=`<div class="case-card" onclick="startCase('${cid}')"><h3>🦷 ${c.title}</h3><p style="font-size:13px;color:#666;margin-top:6px">${c.patient.name}·${c.patient.gender}·${c.patient.age}岁</p><p style="font-size:11px;color:#999;margin-top:4px">${c.difficulty}</p></div>`}
   document.getElementById('caseCards').innerHTML=html;
 });
 
 async function startCase(cid){
-  let r=await fetch('/api/start/'+cid,{method:'POST'});caseInfo=await r.json();
+  let r=await fetch('/api/consult/start/'+cid,{method:'POST'});caseInfo=await r.json();
   caseId=cid;phase=1;examSeq=[];examDone={};examIdx=0;examTotalScore=0;
   document.getElementById('caseSelect').style.display='none';
   document.getElementById('consultUI').style.display='block';
@@ -139,7 +139,7 @@ async function sendChat(){
   inp.value='';
   let chat=document.getElementById('chatBox');
   chat.innerHTML+=`<div class="msg st">${msg}</div>`;
-  let r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+  let r=await fetch('/api/consult/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
   let d=await r.json();
   chat.innerHTML+=`<div class="msg pt">${d.reply}</div>`;
   chat.scrollTop=chat.scrollHeight;
@@ -148,7 +148,7 @@ async function sendChat(){
 }
 
 async function doneP1(){
-  let r=await fetch('/api/phase1/done',{method:'POST'});let d=await r.json();
+  let r=await fetch('/api/consult/phase1/done',{method:'POST'});let d=await r.json();
   // 显示阶段评分
   let missedHTML=d.coverage_detail.filter(x=>!x.covered).map(x=>`<span style="background:#fadbd8;padding:2px 6px;border-radius:4px;margin:2px">❌ ${x.keywords}</span>`).join(' ');
   let coveredHTML=d.coverage_detail.filter(x=>x.covered).map(x=>`<span style="background:#d5f5e3;padding:2px 6px;border-radius:4px;margin:2px">✅ ${x.keywords}</span>`).join(' ');
@@ -215,7 +215,7 @@ function toggleSeq(item){
 }
 
 async function submitSeq(){
-  let r=await fetch('/api/exam/submit_sequence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sequence:examSeq})});
+  let r=await fetch('/api/consult/exam/submit_sequence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sequence:examSeq})});
   let d=await r.json();
   if(d.errors.length>0) alert('顺序建议:\n'+d.errors.join('\n'));
   examIdx=0;renderP2();
@@ -228,7 +228,7 @@ async function submitExamItem(){
   let keyPoints=document.getElementById('kpInput').value.trim();
   if(!instruments||!technique){alert('请填写器械和技术描述');return}
 
-  let r=await fetch('/api/exam/submit_item',{method:'POST',headers:{'Content-Type':'application/json'},
+  let r=await fetch('/api/consult/exam/submit_item',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({item:cur,instruments,technique,key_points:keyPoints})});
   let d=await r.json();
   examTotalScore+=d.scores.total;
@@ -244,7 +244,7 @@ async function submitExamItem(){
 }
 
 async function doneP2(){
-  let r=await fetch('/api/phase2/done',{method:'POST'});let d=await r.json();
+  let r=await fetch('/api/consult/phase2/done',{method:'POST'});let d=await r.json();
   let errHTML=d.errors.length?d.errors.map(e=>`<div style="color:#c0392b">❌ ${e}</div>`).join(''):'<div style="color:#27ae60">✅ 检查顺序正确</div>';
 
   document.getElementById('resultCard').innerHTML=`
@@ -275,7 +275,7 @@ function renderP3(){
 async function submitRecord(){
   let diag=document.getElementById('diag').value.trim();if(!diag){alert('请输入诊断');return}
   let diff=document.getElementById('diff').value.trim();let tx=document.getElementById('txplan').value.trim();
-  let r=await fetch('/api/record/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+  let r=await fetch('/api/consult/record/submit',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({diagnosis:diag,differential:diff,treatment_plan:tx})});
   let d=await r.json();
   document.getElementById('headerMeta').textContent+=' | 总分:'+d.scores.total;

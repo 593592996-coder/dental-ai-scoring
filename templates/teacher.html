@@ -43,7 +43,7 @@ tr:hover{background:#f8f9ff}
 <body>
 <div class="header">
 <h1>📊 教师后台 — 问诊对话监控</h1>
-<a href="/">← 返回学生端</a>
+<a href="/consult">← 返回学生端</a>
 </div>
 <div class="container">
 
@@ -192,7 +192,7 @@ tr:hover{background:#f8f9ff}
 
 <script>
 // 加载所有病例到下拉框
-fetch('/api/cases').then(r=>r.json()).then(cases=>{
+fetch('/api/consult/cases').then(r=>r.json()).then(cases=>{
   let sel = document.getElementById('editCaseId');
   sel.innerHTML = '';
   for(let cid in cases){
@@ -205,7 +205,7 @@ document.getElementById('editCaseId').addEventListener('change', loadWordBank);
 
 async function loadWordBank(){
   let cid = document.getElementById('editCaseId').value;
-  let resp = await fetch('/api/teacher/wordbank/'+cid);
+  let resp = await fetch('/api/consult/teacher/wordbank/'+cid);
   let data = await resp.json();
   let conv = data.conversation || {};
   let html = `<h4 style="font-size:13px;margin-bottom:8px">📋 ${data.case_title} — 当前词库 (${Object.keys(conv).length}条)</h4><table style="font-size:11px"><tr><th>#</th><th>关键词</th><th>回答(前50字)</th><th>操作</th></tr>`;
@@ -224,7 +224,7 @@ function editRow(kw, ans){
 }
 
 // 加载未匹配问题
-fetch('/api/teacher/unmatched').then(r=>r.json()).then(data=>{
+fetch('/api/consult/teacher/unmatched').then(r=>r.json()).then(data=>{
   if(data.length){
     let html='<table style="font-size:11px"><tr><th>时间</th><th>病例</th><th>学生问题</th><th>操作</th></tr>';
     data.reverse().slice(0,20).forEach((d,i)=>{
@@ -243,7 +243,7 @@ async function saveWord(action){
   let answer = document.getElementById('editAnswer').value.trim();
   if(!cid||!keywords||!answer){alert('请填写完整');return}
 
-  let resp = await fetch('/api/teacher/stats/save',{
+  let resp = await fetch('/api/consult/teacher/save',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({case_id:cid,keywords,answer,action})
   });
