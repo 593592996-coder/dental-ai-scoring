@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>教师后台 — 问诊监控</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#1B3A5C,#8e44ad);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:20px}.header a{color:#fff;font-size:13px;text-decoration:none;padding:6px 14px;border:1px solid rgba(255,255,255,.4);border-radius:6px}
+.container{max-width:1300px;margin:16px auto;padding:0 16px}
+.stats{display:flex;gap:14px;margin-bottom:16px}
+.stats .card{flex:1;background:#fff;border-radius:10px;padding:16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.stats .num{font-size:28px;font-weight:700}.stats .lbl{font-size:12px;color:#999;margin-top:4px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.panel{background:#fff;border-radius:10px;padding:16px;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.panel h3{font-size:15px;color:#1B3A5C;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #8e44ad}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 6px;text-align:left;border-bottom:1px solid #eee}
+th{background:#f8f9fa;font-weight:600;color:#1B3A5C;white-space:nowrap}
+tr:hover{background:#f8f9ff}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.badge.green{background:#d5f5e3;color:#27ae60}
+.badge.blue{background:#d6eaf8;color:#2471a3}
+.badge.orange{background:#fdebd0;color:#b9770e}
+.badge.red{background:#fadbd8;color:#c0392b}
+.badge.purple{background:#e8daef;color:#8e44ad}
+
+.match-box{background:#f0fff0;padding:4px 8px;border-radius:4px;font-size:11px;color:#27ae60}
+.ans-box{background:#fff8e1;padding:4px 8px;border-radius:4px;font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.coverage{display:inline-block;width:50px;height:6px;background:#eee;border-radius:3px;overflow:hidden;vertical-align:middle}
+.coverage .bar{height:100%;border-radius:3px}
+
+.detail-row{display:none;background:#fafafa}
+.detail-row.show{display:table-row}
+.detail-row td{padding:12px;font-size:12px;color:#555;white-space:pre-wrap;line-height:1.6}
+
+.cat-chart{display:flex;height:20px;border-radius:10px;overflow:hidden;margin:8px 0}
+.cat-chart .seg{transition:width .5s}
+</style></head>
+<body>
+<div class="header">
+<h1>📊 教师后台 — 问诊对话监控</h1>
+<a href="/">← 返回学生端</a>
+</div>
+<div class="container">
+
+<div class="stats">
+<div class="card"><div class="num" style="color:#8e44ad">{{ total_sessions }}</div><div class="lbl">总问诊次数</div></div>
+<div class="card"><div class="num" style="color:#2B7BEC">{{ case_stats|length }}</div><div class="lbl">涉及病例数</div></div>
+<div class="card"><div class="num" style="color:#27ae60">{{ question_cats|length }}</div><div class="lbl">不同问题数</div></div>
+<div class="card"><div class="num" style="color:#e67e22">{{ category_stats|length }}</div><div class="lbl">问题分类数</div></div>
+</div>
+
+<div class="grid2">
+<!-- 病例使用统计 -->
+<div class="panel">
+<h3>📋 病例使用统计</h3>
+<table>
+<tr><th>病例</th><th>问诊次数</th><th>平均覆盖度</th></tr>
+{% for cid, cs in case_stats.items() %}
+<tr>
+<td>{{ cs.title }}</td>
+<td><strong>{{ cs.count }}</strong></td>
+<td>
+<div class="coverage"><div class="bar" style="width:{{ cs.avg_coverage }}%;background:{% if cs.avg_coverage >= 70 %}#27ae60{% elif cs.avg_coverage >= 40 %}#e67e22{% else %}#c0392b{% endif %}"></div></div>
+<span style="font-size:11px;margin-left:4px">{{ cs.avg_coverage }}%</span>
+</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<!-- 问题分类分布 -->
+<div class="panel">
+<h3>📊 学生提问分类分布</h3>
+<div class="cat-chart">
+{% set cat_colors = {'主诉-部位':'#2B7BEC','主诉-时间':'#3498db','主诉-诱因':'#2980b9','现病史-疼痛':'#e67e22','现病史-自发痛':'#d35400','现病史-用药':'#f39c12','既往史-全身病':'#27ae60','既往史-过敏':'#c0392b','既往史-牙科史':'#1abc9c','生活习惯':'#8e44ad','基本信息':'#16a085','外伤原因':'#e74c3c','松动情况':'#9b59b6','其他':'#95a5a6'} %}
+{% set total_q = category_stats.values()|sum(attribute='count') %}
+{% for cat, cs in category_stats.items()|sort(attribute='1.count',reverse=True) %}
+<div class="seg" style="width:{{ (cs.count/total_q*100)|round(1) }}%;background:{{ cat_colors.get(cat,'#95a5a6') }}" title="{{ cat }}: {{ cs.count }}次"></div>
+{% endfor %}
+</div>
+<table style="margin-top:8px">
+<tr><th>分类</th><th>次数</th><th>占比</th></tr>
+{% for cat, cs in category_stats.items()|sort(attribute='1.count',reverse=True) %}
+<tr><td><span class="badge" style="background:{{ cat_colors.get(cat,'#eee') }};color:#fff">{{ cat }}</span></td><td>{{ cs.count }}</td><td>{{ (cs.count/total_q*100)|round(1) }}%</td></tr>
+{% endfor %}
+</table>
+</div>
+</div>
+
+<!-- 最近对话记录 -->
+<div class="panel">
+<h3>📝 最近问诊对话记录（点击展开查看完整对话+AI匹配详情）</h3>
+<table>
+<tr><th>时间</th><th>病例</th><th>学生问题</th><th>命中关键词</th><th>AI回答</th><th>覆盖率</th></tr>
+{% for log_data in logs[-15:]|reverse %}
+{% for entry in log_data.log[:3] %}
+<tr style="cursor:pointer" onclick="var el=this.nextElementSibling;el.classList.toggle('show')">
+<td style="font-size:10px;white-space:nowrap">{{ entry.timestamp }}</td>
+<td style="font-size:10px">{{ log_data.case_title }}</td>
+<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ entry.student }}</td>
+<td><span class="match-box">{{ entry.matched_keywords|join(' | ') }}</span></td>
+<td><span class="ans-box" title="{{ entry.patient }}">{{ entry.patient[:60] }}{% if entry.patient|length > 60 %}...{% endif %}</span></td>
+<td>
+<div class="coverage"><div class="bar" style="width:{{ entry.coverage }}%;background:{% if entry.coverage >= 70 %}#27ae60{% elif entry.coverage >= 40 %}#e67e22{% else %}#c0392b{% endif %}"></div></div>
+<span style="font-size:10px;margin-left:4px">{{ entry.coverage }}%</span>
+</td>
+</tr>
+<tr class="detail-row">
+<td colspan="6">
+<strong>🩺 学生完整问题:</strong> {{ entry.student }}<br>
+<strong>🎯 匹配关键词组:</strong> {{ entry.all_keywords }}<br>
+<strong>✅ 命中关键词:</strong> {{ entry.matched_keywords|join(', ') or '(无)' }}<br>
+<strong>🤖 AI回答:</strong> {{ entry.patient }}
+</td>
+</tr>
+{% endfor %}
+{% if log_data.log|length > 3 %}
+<tr style="cursor:pointer;background:#f8f9fa" onclick="var pid='{{ log_data.consult_id }}';if(this.nextElementSibling.style.display==='none'){this.nextElementSibling.style.display='table-row';this.textContent='▲ 收起完整对话 ('+{{ log_data.log|length }}+'轮)'}else{this.nextElementSibling.style.display='none';this.textContent='▼ 展开完整对话 ('+{{ log_data.log|length }}+'轮)'}">▼ 展开完整对话 ({{ log_data.log|length }}轮)</tr>
+<tr style="display:none"><td colspan="6" style="padding:12px;white-space:pre-wrap;line-height:1.6;font-size:12px;color:#555">
+{% for e in log_data.log %}
+<strong>{{ e.timestamp }}</strong> 🩺 <em>{{ e.student }}</em><br>
+&nbsp;&nbsp;&nbsp;&nbsp;🎯 关键词组: {{ e.all_keywords }} → 命中: {{ e.matched_keywords|join(', ') }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;🤖 {{ e.patient }}<br><br>
+{% endfor %}
+</td></tr>
+{% endif %}
+{% endfor %}
+{% if logs|length == 0 %}
+<tr><td colspan="6" style="text-align:center;padding:30px;color:#999">暂无问诊记录。请先使用学生端进行模拟问诊。</td></tr>
+{% endif %}
+</table>
+</div>
+
+<!-- 高频问题排名 -->
+<div class="panel">
+<h3>🔥 学生高频问题排名</h3>
+<table>
+<tr><th>排名</th><th>问题</th><th>分类</th><th>出现次数</th><th>AI典型回答</th></tr>
+{% set sorted_q = question_cats.items()|sort(attribute='1.count',reverse=True) %}
+{% for q, data in sorted_q[:20] %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ q }}</td>
+<td><span class="badge" style="background:{{ {'主诉-部位':'#2B7BEC','主诉-时间':'#3498db','主诉-诱因':'#2980b9','现病史-疼痛':'#e67e22','现病史-自发痛':'#d35400','现病史-用药':'#f39c12','既往史-全身病':'#27ae60','既往史-过敏':'#c0392b','既往史-牙科史':'#1abc9c','生活习惯':'#8e44ad','基本信息':'#16a085','外伤原因':'#e74c3c','松动情况':'#9b59b6','其他':'#95a5a6'}.get(data.category,'#eee') }};color:#fff;font-size:10px">{{ data.category }}</span></td>
+<td><strong>{{ data.count }}</strong></td>
+<td style="font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ data.answers[0] if data.answers else '' }}">{{ data.answers[0][:80] if data.answers else '-' }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<!-- 未匹配问题 -->
+<div class="panel" style="margin-top:14px;background:#fff5f5">
+<h3 style="border-color:#c0392b">⚠️ 待补充词库 — 学生问了但AI没匹配到</h3>
+<div id="unmatchedList" style="max-height:200px;overflow-y:auto;font-size:12px;color:#666">加载中...</div>
+</div>
+
+<!-- 在线词库编辑器 -->
+<div class="panel" style="margin-top:14px">
+<h3>✏️ 在线词库编辑器 — 直接修改关键词和回答（保存后立即生效）</h3>
+<div style="display:grid;grid-template-columns:1fr 2fr;gap:14px">
+<div>
+<div class="form-group" style="margin-bottom:10px">
+<label style="display:block;font-size:13px;font-weight:600;color:#1B3A5C;margin-bottom:4px">选择病例</label>
+<select id="editCaseId" style="width:100%;padding:8px;border:1.5px solid #dde;border-radius:6px;font-size:13px" onchange="loadWordBank()">
+</select>
+</div>
+<div class="form-group" style="margin-bottom:10px">
+<label style="display:block;font-size:13px;font-weight:600;color:#1B3A5C;margin-bottom:4px">关键词（用 | 分隔，命中任一即匹配）</label>
+<input id="editKeywords" style="width:100%;padding:8px;border:1.5px solid #dde;border-radius:6px;font-size:13px" placeholder="如: 药|吃药|用过|处理|布洛芬">
+</div>
+<div class="form-group" style="margin-bottom:10px">
+<label style="display:block;font-size:13px;font-weight:600;color:#1B3A5C;margin-bottom:4px">AI回答</label>
+<textarea id="editAnswer" style="width:100%;padding:8px;border:1.5px solid #dde;border-radius:6px;font-size:13px;min-height:60px;resize:vertical" placeholder="患者应该回答的内容"></textarea>
+</div>
+<button class="btn" style="background:#27ae60;color:#fff;margin-right:8px" onclick="saveWord('add')">➕ 新增/更新</button>
+<button class="btn" style="background:#c0392b;color:#fff" onclick="saveWord('delete')">🗑 删除该关键词</button>
+<p id="editMsg" style="margin-top:8px;font-size:12px;color:#27ae60"></p>
+</div>
+<div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;max-height:400px;overflow-y:auto;font-size:12px" id="wordBankPreview">
+<p style="color:#999;text-align:center">← 选择病例查看当前词库</p>
+</div>
+</div>
+</div>
+
+</div>
+
+<script>
+// 加载所有病例到下拉框
+fetch('/api/cases').then(r=>r.json()).then(cases=>{
+  let sel = document.getElementById('editCaseId');
+  sel.innerHTML = '';
+  for(let cid in cases){
+    sel.innerHTML += `<option value="${cid}">${cases[cid].title}</option>`;
+  }
+  loadWordBank(); // 初始加载第一个病例
+});
+// 选择病例时重新加载词库
+document.getElementById('editCaseId').addEventListener('change', loadWordBank);
+
+async function loadWordBank(){
+  let cid = document.getElementById('editCaseId').value;
+  let resp = await fetch('/api/teacher/wordbank/'+cid);
+  let data = await resp.json();
+  let conv = data.conversation || {};
+  let html = `<h4 style="font-size:13px;margin-bottom:8px">📋 ${data.case_title} — 当前词库 (${Object.keys(conv).length}条)</h4><table style="font-size:11px"><tr><th>#</th><th>关键词</th><th>回答(前50字)</th><th>操作</th></tr>`;
+  let i=1;
+  for(let kw in conv){
+    html += `<tr><td>${i}</td><td style="max-width:150px;word-break:break-all">${kw}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${conv[kw].substring(0,50)}</td><td><button onclick="editRow('${kw.replace(/'/g,"\\'")}','${conv[kw].replace(/'/g,"\\'").substring(0,100)}')" style="font-size:10px;padding:2px 6px;border:1px solid #2B7BEC;background:#fff;color:#2B7BEC;border-radius:4px;cursor:pointer">📝</button></td></tr>`;
+    i++;
+  }
+  html += '</table>';
+  document.getElementById('wordBankPreview').innerHTML = html;
+}
+
+function editRow(kw, ans){
+  document.getElementById('editKeywords').value = kw;
+  document.getElementById('editAnswer').value = ans;
+}
+
+// 加载未匹配问题
+fetch('/api/teacher/unmatched').then(r=>r.json()).then(data=>{
+  if(data.length){
+    let html='<table style="font-size:11px"><tr><th>时间</th><th>病例</th><th>学生问题</th><th>操作</th></tr>';
+    data.reverse().slice(0,20).forEach((d,i)=>{
+      html+=`<tr><td style="white-space:nowrap">${d.time}</td><td>${d.case_title}</td><td>${d.question}</td>
+      <td><button onclick="document.getElementById('editKeywords').value='${d.question.replace(/'/g,"\\'")}';document.getElementById('editAnswer').value='请补充AI回答';document.getElementById('editCaseId').value='${d.case_id}';loadWordBank();window.scrollTo(0,document.getElementById('editKeywords').offsetTop)" style="font-size:10px;padding:3px 8px;background:#c0392b;color:#fff;border:none;border-radius:4px;cursor:pointer">➕ 补充词库</button></td></tr>`;
+    });
+    document.getElementById('unmatchedList').innerHTML=html;
+  }else{
+    document.getElementById('unmatchedList').innerHTML='<p style="text-align:center;color:#999;padding:20px">🎉 所有问题都匹配到了对应的关键词，词库覆盖完整！</p>';
+  }
+});
+
+async function saveWord(action){
+  let cid = document.getElementById('editCaseId').value;
+  let keywords = document.getElementById('editKeywords').value.trim();
+  let answer = document.getElementById('editAnswer').value.trim();
+  if(!cid||!keywords||!answer){alert('请填写完整');return}
+
+  let resp = await fetch('/api/teacher/stats/save',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({case_id:cid,keywords,answer,action})
+  });
+  let d = await resp.json();
+  document.getElementById('editMsg').textContent = d.message||d.error;
+  if(d.success) location.reload();
+}
+</script>
+</body></html>

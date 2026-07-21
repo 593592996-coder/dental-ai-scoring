@@ -17,11 +17,20 @@ from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from io import BytesIO
+import os, json, uuid, time
+from datetime import datetime
 
 from scoring_engine_v2 import II类洞评分引擎V2, SCORING_CONFIG
 from scoring_endodontic import 开髓术评分引擎, SCORING_CONFIG as ENDO_CONFIG
 from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFIG
 from cases_consult import CASES as CONSULT_CASES
+
+# 问诊系统路径
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONSULT_LOG_DIR = os.path.join(BASE_DIR, 'consult_logs')
+CONSULT_IMG_DIR = os.path.join(BASE_DIR, 'static', 'images')
+os.makedirs(CONSULT_LOG_DIR, exist_ok=True)
+os.makedirs(CONSULT_IMG_DIR, exist_ok=True)
 
 # ── App Setup ──
 BASE_DIR = Path(__file__).parent.absolute()
