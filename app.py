@@ -49,8 +49,10 @@ REPORT_FOLDER.mkdir(exist_ok=True)
 # 全局评分历史（简化版，生产环境应使用数据库）
 scoring_history = []
 
-# 启动时加载历史报告
+# 启动时加载历史报告（仅II类洞，跳过开髓/根管X光报告）
 for f in sorted(REPORT_FOLDER.glob('*.json')):
+    if f.name.startswith(('endo_', 'xray_')):
+        continue
     try:
         with open(f, 'r', encoding='utf-8') as fh:
             scoring_history.append(json.load(fh))
@@ -902,6 +904,7 @@ def view_report(session_id):
 @app.route('/dashboard')
 def dashboard():
     """教师端 — 全班统计分析"""
+    is_demo = not scoring_history
     if not scoring_history:
         # 生成模拟数据用于演示
         import random
@@ -933,6 +936,12 @@ def dashboard():
         history = demo_data
     else:
         history = scoring_history
+
+    # 班级筛选
+    class_list = sorted(set(h.get('student_class', '未知班级') for h in history))
+    selected_class = request.args.get('class', '').strip()
+    if selected_class:
+        history = [h for h in history if h.get('student_class') == selected_class]
 
     # 统计分析
     scores = [h['total_score'] for h in history]
@@ -980,6 +989,9 @@ def dashboard():
                            distribution=distribution,
                            dim_analysis=dim_analysis,
                            total_students=len(history),
+                           is_demo=is_demo,
+                           class_list=class_list,
+                           selected_class=selected_class,
                            config=SCORING_CONFIG)
 
 
@@ -989,9 +1001,97 @@ def api_history():
     return jsonify(scoring_history[-20:])  # 最近20条
 
 
+@app.route('/api/delete/<session_id>', methods=['POST'])
+def delete_record(session_id):
+    """删除一条II类洞评分记录（含报告文件与上传照片）"""
+    # 校验session_id格式，防止路径穿越
+    if len(session_id) != 8 or not all(c in '0123456789abcdefABCDEF' for c in session_id):
+        return jsonify({'ok': False, 'error': '无效的会话ID'}), 400
+
+    global scoring_history
+    before = len(scoring_history)
+    scoring_history = [h for h in scoring_history if h.get('session_id') != session_id]
+    removed = before - len(scoring_history)
+
+    report_deleted = 0
+    report_path = REPORT_FOLDER / f'{session_id}.json'
+    if report_path.exists():
+        try:
+            report_path.unlink()
+            report_deleted = 1
+        except Exception:
+            pass
+
+    photos_deleted = 0
+    for p in UPLOAD_FOLDER.glob(f'{session_id}_*'):
+        if not p.is_file():
+            continue
+        try:
+            p.unlink()
+            photos_deleted += 1
+        except Exception:
+            pass
+
+    if removed or report_deleted or photos_deleted:
+        return jsonify({'ok': True, 'removed': removed,
+                        'reports_deleted': report_deleted, 'photos_deleted': photos_deleted})
+    return jsonify({'ok': False, 'error': '记录不存在'}), 404
+
+
+@app.route('/api/clear', methods=['POST'])
+def clear_all():
+    """清空全部II类洞评分数据（记录+报告+照片），不影响开髓/根管X光"""
+    global scoring_history
+    cleared = len(scoring_history)
+    scoring_history.clear()
+
+    reports_deleted = 0
+    for p in REPORT_FOLDER.glob('*.json'):
+        if p.name.startswith(('endo_', 'xray_')):
+            continue
+        try:
+            p.unlink()
+            reports_deleted += 1
+        except Exception:
+            pass
+
+    photos_deleted = 0
+    for p in UPLOAD_FOLDER.glob('*'):
+        if p.name.startswith(('endo_', 'xray_')):
+            continue
+        if not p.is_file():
+            continue
+        try:
+            p.unlink()
+            photos_deleted += 1
+        except Exception:
+            pass
+
+    return jsonify({'ok': True, 'cleared': cleared,
+                    'reports_deleted': reports_deleted, 'photos_deleted': photos_deleted})
+
+
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory('static', filename)
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    """服务学生上传的原始照片"""
+    return send_from_directory(str(UPLOAD_FOLDER), filename)
+
+
+@app.route('/api/photos/<session_id>')
+def api_photos(session_id):
+    """返回某次提交的所有照片URL"""
+    if len(session_id) != 8 or not all(c in '0123456789abcdefABCDEF' for c in session_id):
+        return jsonify({'error': '无效的会话ID'}), 400
+    photos = []
+    for p in sorted(UPLOAD_FOLDER.glob(f'{session_id}_*')):
+        if p.is_file():
+            photos.append('/uploads/' + p.name)
+    return jsonify({'photos': photos})
 
 
 # ── Main ──
