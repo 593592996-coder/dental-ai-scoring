@@ -185,11 +185,17 @@ analyzeBtn.addEventListener('click', async () => {
 
     try {
         const resp = await fetch('/analyze', { method: 'POST', body: formData });
-        const data = await resp.json();
+        const txt = await resp.text();
+        let data;
+        try { data = JSON.parse(txt); }
+        catch (_) {
+            alert('服务器返回异常（HTTP ' + resp.status + '）。请重试；若照片过大请压缩或减少张数，若反复失败请更换更清晰的照片。');
+            return;
+        }
         if (data.error) { alert(data.error); return; }
         renderResult(data);
     } catch (err) {
-        alert('分析失败：' + err.message);
+        alert('分析失败：网络或服务器异常，请重试。（' + err.message + '）');
     } finally {
         loadingOverlay.classList.remove('show');
         document.getElementById('uploadCard').style.opacity = '1';
