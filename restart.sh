@@ -1,8 +1,9 @@
 #!/bin/bash
 # II类洞AI评分系统 — 一键重启脚本
 cd /Users/ouyangjunhan/Desktop/AI评分系统
-pkill -f 'python3 app.py' 2>/dev/null
-sleep 1
+pkill -f 'app.py' 2>/dev/null
+lsof -ti:5050 2>/dev/null | xargs kill -9 2>/dev/null
+sleep 1.5
 echo "启动 II类洞AI评分系统..."
 nohup python3 app.py > server.log 2>&1 &
 sleep 2
@@ -15,4 +16,4 @@ echo "  局域网: http://$(ipconfig getifaddr en0 2>/dev/null || echo 'YOUR_IP'
 echo "=========================================="
 echo ""
 echo "查看日志: tail -f /Users/ouyangjunhan/Desktop/AI评分系统/server.log"
-echo "停止服务: pkill -f 'python3 app.py'"
+echo "停止服务: pkill -f 'app.py' 或 lsof -ti:5050 | xargs kill -9"
