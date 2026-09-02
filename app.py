@@ -68,6 +68,33 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def save_image_compressed(file, filepath, max_dim=1600, quality=82):
+    """保存学生上传照片时用 OpenCV 压缩（iPhone 原图常 1-3MB，免费档磁盘仅 512MB）。
+    长边压到 max_dim、JPEG quality，体积约降到 1/10，报告附图仍清晰；失败则回退原图保存。"""
+    try:
+        import cv2
+        import numpy as np
+        data = file.read()
+        mat = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        if mat is None:
+            file.seek(0); file.save(str(filepath)); return
+        h, w = mat.shape[:2]
+        if max(h, w) > max_dim:
+            s = max_dim / max(h, w)
+            mat = cv2.resize(mat, (int(w * s), int(h * s)))
+        ok, buf = cv2.imencode('.jpg', mat, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        if ok:
+            with open(str(filepath), 'wb') as f:
+                f.write(buf.tobytes())
+        else:
+            file.seek(0); file.save(str(filepath))
+    except Exception:
+        try:
+            file.seek(0); file.save(str(filepath))
+        except Exception:
+            pass
+
+
 def _safe_reports(analyze_fn, paths, **kwargs):
     """逐张分析照片：跳过抛异常或无法识别（无评分维度）的照片，返回成功的报告列表。
 
@@ -698,7 +725,7 @@ def analyze():
             ext = file.filename.rsplit('.', 1)[1].lower()
             filename = f'{session_id}_{i}_{int(time.time())}.{ext}'
             filepath = UPLOAD_FOLDER / filename
-            file.save(str(filepath))
+            save_image_compressed(file, filepath)
             saved_paths.append(str(filepath))
 
     if not saved_paths:
@@ -1176,7 +1203,7 @@ def analyze_endo():
         if file and allowed_file(file.filename):
             ext = file.filename.rsplit('.', 1)[1].lower()
             fp = UPLOAD_FOLDER / f'endo_{session_id}_{i}_{int(time.time())}.{ext}'
-            file.save(str(fp)); saved_paths.append(str(fp))
+            save_image_compressed(file, fp); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
     reports = _safe_reports(endo_engine.analyze, saved_paths)
     if not reports:
@@ -1213,7 +1240,7 @@ def analyze_xray():
         if file and allowed_file(file.filename):
             ext = file.filename.rsplit('.', 1)[1].lower()
             fp = UPLOAD_FOLDER / f'xray_{session_id}_{i}_{int(time.time())}.{ext}'
-            file.save(str(fp)); saved_paths.append(str(fp))
+            save_image_compressed(file, fp); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
     reports = _safe_reports(xray_engine.analyze, saved_paths)
     if not reports:
