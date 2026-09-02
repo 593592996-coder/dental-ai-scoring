@@ -6,68 +6,158 @@
     <title>评分报告 — {{ report.student_name }}</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Microsoft YaHei',sans-serif; background:#f0f4f8; padding:20px; }
-        .report { max-width:800px; margin:0 auto; background:#fff; border-radius:12px; padding:30px; box-shadow:0 4px 20px rgba(0,0,0,.1); }
-        .report h1 { font-size:24px; color:#1B3A5C; text-align:center; margin-bottom:4px; }
-        .report .subtitle { text-align:center; color:#999; font-size:13px; margin-bottom:20px; }
-        .score-circle { width:140px; height:140px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:16px auto; }
-        .score-circle .big { font-size:42px; font-weight:700; color:#fff; }
-        .score-circle .small { font-size:14px; color:rgba(255,255,255,.85); }
-        .meta { text-align:center; color:#666; font-size:14px; margin-bottom:20px; }
-        .section { margin:20px 0; padding:16px; background:#fafbfc; border-radius:8px; }
-        .section h3 { font-size:15px; color:#1B3A5C; margin-bottom:10px; }
-        .dim { display:flex; align-items:center; margin:6px 0; }
-        .dim .name { width:100px; font-size:13px; text-align:right; padding-right:10px; }
-        .dim .bar { flex:1; height:20px; background:#eee; border-radius:10px; overflow:hidden; }
-        .dim .fill { height:100%; border-radius:10px; }
-        .dim .val { width:60px; font-size:12px; padding-left:8px; }
-        .problem { background:#fff5f5; border-left:3px solid #c0392b; padding:8px 12px; margin:6px 0; font-size:13px; }
-        .suggestion { background:#fff8e1; border-left:3px solid #f39c12; padding:8px 12px; margin:4px 0; font-size:13px; }
-        .btn-print { display:block; width:200px; margin:20px auto 0; padding:12px; background:#2B7BEC; color:#fff; border:none; border-radius:8px; font-size:15px; cursor:pointer; }
-        @media print { .btn-print { display:none; } body { background:#fff; } }
+        body { font-family:'Microsoft YaHei','PingFang SC',sans-serif; background:#f0f4f8; padding:20px; color:#222; }
+        .toolbar { max-width:800px; margin:0 auto 16px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+        .toolbar button { padding:11px 18px; border:none; border-radius:8px; font-size:14px; color:#fff; cursor:pointer; }
+        .btn-pdf { background:#c0392b; } .btn-img { background:#27ae60; }
+        .btn-word { background:#2B7BEC; } .btn-print { background:#7f8c8d; }
+        .report { max-width:800px; margin:0 auto; background:#fff; border-radius:12px; padding:32px 36px; box-shadow:0 4px 20px rgba(0,0,0,.1); }
+        .report h1 { font-size:23px; color:#1B3A5C; text-align:center; margin-bottom:4px; }
+        .report .subtitle { text-align:center; color:#999; font-size:13px; margin-bottom:18px; }
+        .score-circle { width:130px; height:130px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:10px auto; }
+        .score-circle .big { font-size:40px; font-weight:700; color:#fff; }
+        .score-circle .small { font-size:13px; color:rgba(255,255,255,.9); }
+        .meta { text-align:center; color:#444; font-size:14px; margin-bottom:6px; }
+        .section { margin:18px 0; padding:14px 16px; background:#fafbfc; border-radius:8px; break-inside:avoid; }
+        .section > h3 { font-size:15px; color:#1B3A5C; margin-bottom:10px; border-bottom:2px solid #eef2f7; padding-bottom:6px; }
+        .dim { margin:10px 0; padding:10px; background:#fff; border-radius:6px; border:1px solid #eef2f7; break-inside:avoid; }
+        .dim-head { display:flex; align-items:center; }
+        .dim-head .name { flex:1; font-size:13.5px; font-weight:600; }
+        .dim-head .bar { flex:1.2; height:14px; background:#eee; border-radius:7px; overflow:hidden; margin:0 10px; }
+        .dim-head .fill { height:100%; border-radius:7px; }
+        .dim-head .val { width:64px; text-align:right; font-size:13px; font-weight:700; color:#1B3A5C; }
+        .dim-detail { font-size:12.5px; color:#555; margin:6px 0 0; line-height:1.6; }
+        .dim-process { font-size:11.5px; color:#666; background:#f6f8fa; padding:8px 10px; border-radius:5px; margin-top:6px; white-space:pre-wrap; line-height:1.55; }
+        .dim-sugg { font-size:12.5px; background:#fff8e1; border-left:3px solid #f39c12; padding:7px 10px; border-radius:4px; margin-top:6px; line-height:1.55; }
+        .problem { background:#fff5f5; border-left:3px solid #c0392b; padding:8px 12px; margin:6px 0; font-size:13px; line-height:1.55; }
+        .suggestion { background:#fff8e1; border-left:3px solid #f39c12; padding:8px 12px; margin:5px 0; font-size:13px; line-height:1.55; }
+        .overall { background:#f0f7ff; border-left:3px solid #2B7BEC; padding:10px 14px; border-radius:6px; font-size:13px; line-height:1.7; }
+        .sw { font-size:13px; line-height:1.7; margin:4px 0; }
+        .sw.good { color:#27ae60; } .sw.bad { color:#e67e22; }
+        .photos { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-start; }
+        .photos img { width:150px; height:112px; object-fit:cover; border-radius:8px; border:1px solid #e5e9f0; }
+        .foot { text-align:center; color:#aaa; font-size:11.5px; margin-top:18px; }
+        @media print {
+            body { background:#fff; padding:0; }
+            .toolbar { display:none; }
+            .report { box-shadow:none; border-radius:0; padding:10px; max-width:100%; }
+        }
     </style>
 </head>
 <body>
-<div class="report">
-    <h1>🦷 II类洞制备 AI评分报告</h1>
-    <p class="subtitle">AI评分系统 v1.0 · {{ report.timestamp }}</p>
+{% set title = {'endo':'开髓洞形 AI评分报告', 'xray':'根管X光片 AI评分报告'}.get(module, 'II类洞制备 AI评分报告') %}
+
+<div class="toolbar" id="toolbar">
+    <button class="btn-pdf" onclick="exportPDF()">📄 存为 PDF</button>
+    <button class="btn-img" onclick="exportImage()">🖼 存为图片</button>
+    <button class="btn-word" onclick="exportWord()">📝 存为 Word</button>
+    <button class="btn-print" onclick="window.print()">🖨 打印</button>
+</div>
+
+<div class="report" id="reportBody">
+    <h1>🦷 {{ title }}</h1>
+    <p class="subtitle">AI评分系统 · {{ report.timestamp }}</p>
 
     <div class="score-circle" style="background:{% if report.grade == '优秀' %}#27ae60{% elif report.grade == '良好' %}#2B7BEC{% elif report.grade == '中等' %}#f39c12{% elif report.grade == '及格' %}#e67e22{% else %}#c0392b{% endif %};">
         <span class="big">{{ report.total_score }}</span>
         <span class="small">/ {{ report.max_total }} · {{ report.grade }}</span>
     </div>
-    <p class="meta">{{ report.student_name }} · {{ report.student_class }} · 分析{{ report.photo_count }}张照片</p>
+    <p class="meta"><strong>{{ report.student_name }}</strong> · {{ report.student_class }} · 共分析 {{ report.photo_count }} 张照片</p>
+
+    {% if report.overall_assessment %}
+    <div class="section">
+        <h3>📝 整体评估</h3>
+        <div class="overall">{{ report.overall_assessment }}</div>
+    </div>
+    {% endif %}
 
     <div class="section">
-        <h3>📊 分项得分</h3>
+        <h3>📊 分项评分（含打分过程与建议）</h3>
         {% for d in report.dimensions %}
         <div class="dim">
-            <div class="name">{% if d.status == 'good' %}✅{% elif d.status == 'warning' %}⚠️{% else %}❌{% endif %} {{ d.name }}</div>
-            <div class="bar"><div class="fill" style="width:{{ d.percentage }}%;background:{% if d.status == 'good' %}#27ae60{% elif d.status == 'warning' %}#f39c12{% else %}#c0392b{% endif %};"></div></div>
-            <div class="val">{{ d.score }}/{{ d.max_score }}</div>
+            <div class="dim-head">
+                <span class="name">{% if d.status == 'good' %}✅{% elif d.status == 'warning' %}⚠️{% else %}❌{% endif %} {{ d.name }}</span>
+                <span class="bar"><span class="fill" style="width:{{ d.percentage }}%;background:{% if d.status == 'good' %}#27ae60{% elif d.status == 'warning' %}#f39c12{% else %}#c0392b{% endif %};"></span></span>
+                <span class="val">{{ d.score }}/{{ d.max_score }}</span>
+            </div>
+            {% if d.detail %}<p class="dim-detail">{{ d.detail }}</p>{% endif %}
+            {% if d.process_analysis %}<div class="dim-process">{{ d.process_analysis }}</div>{% endif %}
+            {% if d.targeted_suggestion %}<div class="dim-sugg">💡 {{ d.targeted_suggestion }}</div>{% endif %}
         </div>
         {% endfor %}
     </div>
 
+    {% if report.strengths or report.weaknesses %}
+    <div class="section">
+        <h3>🎯 强项与弱项</h3>
+        {% for s in (report.strengths or []) %}<div class="sw good">✅ {{ s }}</div>{% endfor %}
+        {% for w in (report.weaknesses or []) %}<div class="sw bad">⚠️ {{ w }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
     {% if report.problem_areas %}
     <div class="section">
         <h3>🔍 问题定位</h3>
-        {% for p in report.problem_areas %}
-        <div class="problem">{{ p.detail }}</div>
-        {% endfor %}
+        {% for p in report.problem_areas %}<div class="problem">{{ p.detail if p.detail is defined else p.msg if p.msg is defined else p }}</div>{% endfor %}
     </div>
     {% endif %}
 
     {% if report.suggestions %}
     <div class="section">
-        <h3>🔧 改进建议</h3>
-        {% for s in report.suggestions %}
-        <div class="suggestion">{{ loop.index }}. {{ s }}</div>
-        {% endfor %}
+        <h3>🔧 改进建议（按优先级）</h3>
+        {% for s in report.suggestions %}<div class="suggestion">{{ loop.index }}. {{ s }}</div>{% endfor %}
     </div>
     {% endif %}
 
-    <button class="btn-print" onclick="window.print()">🖨 打印报告</button>
+    {% if photos %}
+    <div class="section">
+        <h3>📷 提交的照片（{{ photos|length }} 张）</h3>
+        <div class="photos">
+            {% for ph in photos %}<img src="{{ ph }}" alt="提交照片{{ loop.index }}">{% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <p class="foot">本报告由 AI 评分系统自动生成，仅供教学参考 · 会话ID {{ report.session_id }}</p>
 </div>
+
+<script src="/static/vendor/html2canvas.min.js"></script>
+<script src="/static/vendor/html2pdf.bundle.min.js"></script>
+<script>
+const fileName = '评分报告_{{ report.student_name }}_{{ report.session_id }}';
+function exportPDF() {
+    const el = document.getElementById('reportBody');
+    if (typeof html2pdf === 'undefined') { alert('PDF组件未加载，请改用"打印"→存储为PDF'); return; }
+    document.getElementById('toolbar').style.display = 'none';
+    html2pdf().set({
+        margin: 8, filename: fileName + '.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+    }).from(el).save().then(() => { document.getElementById('toolbar').style.display = 'flex'; });
+}
+function exportImage() {
+    if (typeof html2canvas === 'undefined') { alert('图片组件未加载，请截图保存'); return; }
+    document.getElementById('toolbar').style.display = 'none';
+    html2canvas(document.getElementById('reportBody'), { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+        const a = document.createElement('a');
+        a.download = fileName + '.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+        document.getElementById('toolbar').style.display = 'flex';
+    });
+}
+function exportWord() {
+    const styles = '<style>body{font-family:"Microsoft YaHei",sans-serif;font-size:12pt;}h1{font-size:18pt;text-align:center;}h3{font-size:13pt;color:#1B3A5C;}.dim{border:1px solid #ddd;padding:6px;margin:6px 0;}.dim-process{background:#f6f8fa;padding:6px;font-size:10pt;white-space:pre-wrap;}.dim-sugg{background:#fff8e1;padding:6px;}.problem{background:#fff5f5;padding:6px;}.suggestion{background:#fff8e1;padding:6px;}img{width:220px;margin:4px;}</style>';
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">${styles}</head><body>` +
+                 document.getElementById('reportBody').innerHTML + '</body></html>';
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName + '.doc';
+    a.click();
+}
+</script>
 </body>
 </html>
