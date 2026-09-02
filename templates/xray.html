@@ -54,6 +54,12 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 <div class="form-group"><label>学生姓名</label><input type="text" id="studentName" placeholder="请输入姓名"></div>
 <div class="form-group"><label>班级</label><input type="text" id="studentClass" value="25口腔1班"></div>
 <div class="upload-zone" id="uploadZone"><div class="icon">🩻</div><div class="text">上传根管充填术后X光片</div><div class="hint">支持JPG/PNG，建议上传清晰的正位/偏位投照X光片</div><input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
+<div style="margin:14px 0 4px;padding:12px 14px;background:#fff8e1;border:1.5px solid #f39c12;border-radius:10px;font-size:13px;line-height:1.9;color:#7a5b00;text-align:left">
+<div style="font-weight:700;font-size:14px;color:#b9770e;margin-bottom:4px">📸 X光片要点（不清晰会分析失败）</div>
+① 影像<b>清晰、对比度足够</b>，根管完整在画面内，不过曝、不太淡<br>
+② <b>正位＋偏位投照</b>都传，系统自动取最高分那张<br>
+③ 避免画面歪斜、截断、有重影或大面积遮挡
+</div>
 <div class="preview-grid" id="previewGrid"></div>
 <div style="margin-top:16px"><button class="btn btn-primary" id="analyzeBtn" disabled>🩻 开始AI评估</button></div>
 </div>
