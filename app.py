@@ -925,13 +925,50 @@ def export_excel():
 
 @app.route('/report/<session_id>')
 def view_report(session_id):
-    """查看评分报告"""
-    report_path = REPORT_FOLDER / f'{session_id}.json'
-    if report_path.exists():
-        with open(report_path, 'r', encoding='utf-8') as f:
-            report = json.load(f)
-        return render_template('report.html', report=report)
-    return '报告不存在', 404
+    """查看/导出完整评分报告（支持二类洞/开髓术/X光片，含学生上传照片）"""
+    import base64
+    # 三种模块的报告文件命名：二类洞无前缀，开髓 endo_，X光 xray_
+    candidates = [
+        ('class2', REPORT_FOLDER / f'{session_id}.json', f'{session_id}_'),
+        ('endo',   REPORT_FOLDER / f'endo_{session_id}.json', f'endo_{session_id}_'),
+        ('xray',   REPORT_FOLDER / f'xray_{session_id}.json', f'xray_{session_id}_'),
+    ]
+    module, report_path, photo_prefix = None, None, None
+    for m, p, pref in candidates:
+        if p.exists():
+            module, report_path, photo_prefix = m, p, pref
+            break
+    if report_path is None:
+        return '报告不存在', 404
+
+    with open(report_path, 'r', encoding='utf-8') as f:
+        report = json.load(f)
+
+    # 收集本次提交的照片，压缩后转 base64 内嵌（PDF/图片/Word 导出时离线可带图，
+    # 压缩到宽≤900px/JPEG q80，避免手机端 html2canvas 处理十几MB原图卡顿）
+    import cv2
+    import numpy as np
+    photos = []
+    for img in sorted(UPLOAD_FOLDER.glob(f'{photo_prefix}*')):
+        if img.suffix.lower().lstrip('.') not in ALLOWED_EXTENSIONS:
+            continue
+        try:
+            data = img.read_bytes()
+            mat = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+            if mat is not None:
+                h, w = mat.shape[:2]
+                if max(h, w) > 900:
+                    s = 900 / max(h, w)
+                    mat = cv2.resize(mat, (int(w * s), int(h * s)))
+                ok, buf = cv2.imencode('.jpg', mat, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if ok:
+                    data = buf.tobytes()
+            b64 = base64.b64encode(data).decode()
+            photos.append(f'data:image/jpeg;base64,{b64}')
+        except Exception:
+            continue
+
+    return render_template('report.html', report=report, module=module, photos=photos)
 
 
 @app.route('/dashboard')
