@@ -68,6 +68,39 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def _safe_reports(analyze_fn, paths, **kwargs):
+    """逐张分析照片：跳过抛异常或无法识别（无评分维度）的照片，返回成功的报告列表。
+
+    学生上传的照片常因光线/模糊/角度问题导致引擎找不到轮廓而抛异常，
+    这里逐张兜底，避免单张坏图让整个请求 500。
+    """
+    reports = []
+    for p in paths:
+        try:
+            r = analyze_fn(p, **kwargs) if kwargs else analyze_fn(p)
+        except Exception as e:
+            app.logger.warning('照片分析异常 %s: %s', p, e)
+            continue
+        if r is None or not getattr(r, 'dimensions', None):
+            # 图像无法读取 / 未检出任何评分维度 → 该张不可用
+            app.logger.warning('照片未能识别 %s', p)
+            continue
+        reports.append(r)
+    return reports
+
+
+# ── 错误处理器：对分析/接口请求始终返回 JSON，避免前端 .json() 崩成 Safari 黑话 ──
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': '照片总大小超过 16MB 上限，请减少张数或压缩后再上传（iPhone 可在设置-相机改用较小格式）。'}), 413
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    app.logger.exception('服务器内部错误: %s', e)
+    return jsonify({'error': '服务器分析时出现异常，请重试或更换更清晰的照片。'}), 500
+
+
 # ── Routes ──
 @app.route('/')
 def index():
@@ -671,11 +704,11 @@ def analyze():
     if not saved_paths:
         return jsonify({'error': '没有有效的照片文件（支持jpg/png/bmp）'}), 400
 
-    # 分析每张照片，取最佳结果
-    all_reports = []
-    for path in saved_paths:
-        report = engine.analyze(path, operation_time=operation_time, tooth_type=tooth_type)
-        all_reports.append(report)
+    # 逐张分析，跳过无法识别/异常的照片，取最佳结果
+    all_reports = _safe_reports(engine.analyze, saved_paths,
+                                operation_time=operation_time, tooth_type=tooth_type)
+    if not all_reports:
+        return jsonify({'error': '未能从照片中识别出合格的洞形。请按 5 个标准角度（颌面正位/邻面侧位/45°斜位/洞底特写）在光线充足处重新拍摄，确保洞形清晰、对焦准确后再上传。'}), 422
 
     # 选择总分最高的报告
     best_report = max(all_reports, key=lambda r: r.total_score)
@@ -1108,7 +1141,9 @@ def analyze_endo():
             fp = UPLOAD_FOLDER / f'endo_{session_id}_{i}_{int(time.time())}.{ext}'
             file.save(str(fp)); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
-    reports = [endo_engine.analyze(p) for p in saved_paths]
+    reports = _safe_reports(endo_engine.analyze, saved_paths)
+    if not reports:
+        return jsonify({'error': '未能从照片中识别出开髓洞形。请按要求拍摄（①颌面正位 ②洞底插K锉），在光线充足、对焦清晰处重拍后再上传。'}), 422
     best = max(reports, key=lambda r: r.total_score)
     dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
              'percentage': round(d.score/d.max_score*100,1) if d.max_score>0 else 0,
@@ -1143,7 +1178,9 @@ def analyze_xray():
             fp = UPLOAD_FOLDER / f'xray_{session_id}_{i}_{int(time.time())}.{ext}'
             file.save(str(fp)); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
-    reports = [xray_engine.analyze(p) for p in saved_paths]
+    reports = _safe_reports(xray_engine.analyze, saved_paths)
+    if not reports:
+        return jsonify({'error': '未能从X光片中识别出有效根管影像。请上传清晰、对比度足够、根管完整可见的X光片后重试。'}), 422
     best = max(reports, key=lambda r: r.total_score)
     dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
              'percentage': round(d.score/d.max_score*100,1) if d.max_score>0 else 0,
