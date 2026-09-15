@@ -23,6 +23,9 @@ from datetime import datetime
 from scoring_engine_v2 import II类洞评分引擎V2, SCORING_CONFIG
 from scoring_endodontic import 开髓术评分引擎, SCORING_CONFIG as ENDO_CONFIG
 from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFIG
+from scoring_crown_anterior import 前牙全瓷冠评分引擎
+from scoring_crown_posterior import 后牙全瓷冠评分引擎
+from scoring_crown_common import SLOTS as CROWN_SLOTS
 from cases_consult import CASES as CONSULT_CASES
 
 # 问诊系统路径
@@ -46,12 +49,44 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 REPORT_FOLDER.mkdir(exist_ok=True)
 
+# 临床思维训练板块（独立蓝图，挂 /train、/admin，不影响评分流程）
+try:
+    from training import train_bp
+    app.register_blueprint(train_bp)
+except Exception as _e:
+    print('⚠️ 临床思维训练板块加载失败:', _e)
+
+try:
+    from unified_admin import bp as admin_bp
+    app.register_blueprint(admin_bp)
+except Exception as _e:
+    print('⚠️ 统一教师后台加载失败:', _e)
+
+
+def _current_student():
+    """统一登录身份（由思维训练的 /train/api/identify 写入 session）。
+    返回 {'sid','name','class'}；未登录 sid 为空，由各接口回退到手填表单。"""
+    sid = session.get('student_number') or ''
+    if not sid:
+        return {'sid': '', 'name': '', 'class': ''}
+    return {'sid': sid, 'name': session.get('student_name', ''),
+            'class': session.get('student_class', '')}
+
+
+def _identity_from_form_or_session(form):
+    """评分接口取身份：已登录用 session（权威），否则回退表单。返回 (sid,name,class)。"""
+    me = _current_student()
+    if me['sid']:
+        return me['sid'], me['name'], me['class']
+    return ('', form.get('student_name', '匿名').strip() or '匿名',
+            form.get('student_class', '未知班级').strip() or '未知班级')
+
 # 全局评分历史（简化版，生产环境应使用数据库）
 scoring_history = []
 
-# 启动时加载历史报告（仅II类洞，跳过开髓/根管X光报告）
+# 启动时加载历史报告（仅II类洞，跳过开髓/根管X光/全瓷冠报告）
 for f in sorted(REPORT_FOLDER.glob('*.json')):
-    if f.name.startswith(('endo_', 'xray_')):
+    if f.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
         continue
     try:
         with open(f, 'r', encoding='utf-8') as fh:
@@ -151,6 +186,24 @@ def endo_index():
 def xray_index():
     """根管X光片评估 — 学生端"""
     return render_template('xray.html', config=XRAY_CONFIG)
+
+
+@app.route('/crown_ant')
+def crown_ant_index():
+    """前牙全瓷冠预备（11/21）— 学生端"""
+    cfg = {'mode': 'ant', 'title': '前牙全瓷冠牙体预备 AI评分（11/21）',
+           'teeth': ['11', '21'], 'endpoint': '/analyze_crown_ant',
+           'occlusal_label': '③切端位（俯视切端间隙/45°腭侧斜面）'}
+    return render_template('crown.html', cfg=cfg, slots=CROWN_SLOTS)
+
+
+@app.route('/crown_post')
+def crown_post_index():
+    """后牙全瓷冠预备（16/26/36/46）— 学生端"""
+    cfg = {'mode': 'post', 'title': '后牙全瓷冠牙体预备 AI评分（16/26/36/46）',
+           'teeth': ['16', '26', '36', '46'], 'endpoint': '/analyze_crown_post',
+           'occlusal_label': '③合面位（俯视功能尖斜面/合面间隙）'}
+    return render_template('crown.html', cfg=cfg, slots=CROWN_SLOTS)
 
 
 # ═══════════════════════════════
@@ -706,8 +759,7 @@ def analyze():
         return jsonify({'error': '未上传照片'}), 400
 
     files = request.files.getlist('photos')
-    student_name = request.form.get('student_name', '匿名')
-    student_class = request.form.get('student_class', '未知班级')
+    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
     tooth_type = request.form.get('tooth_type', 'real')
     operation_time = request.form.get('operation_time', None)
 
@@ -759,6 +811,7 @@ def analyze():
 
     result = {
         'session_id': session_id,
+        'student_number': student_number,
         'student_name': student_name,
         'student_class': student_class,
         'total_score': round(best_report.total_score, 1),
@@ -956,9 +1009,11 @@ def view_report(session_id):
     import base64
     # 三种模块的报告文件命名：二类洞无前缀，开髓 endo_，X光 xray_
     candidates = [
-        ('class2', REPORT_FOLDER / f'{session_id}.json', f'{session_id}_'),
-        ('endo',   REPORT_FOLDER / f'endo_{session_id}.json', f'endo_{session_id}_'),
-        ('xray',   REPORT_FOLDER / f'xray_{session_id}.json', f'xray_{session_id}_'),
+        ('class2',    REPORT_FOLDER / f'{session_id}.json', f'{session_id}_'),
+        ('endo',      REPORT_FOLDER / f'endo_{session_id}.json', f'endo_{session_id}_'),
+        ('xray',      REPORT_FOLDER / f'xray_{session_id}.json', f'xray_{session_id}_'),
+        ('crown_ant', REPORT_FOLDER / f'crown_ant_{session_id}.json', f'crown_ant_{session_id}_'),
+        ('crown_post',REPORT_FOLDER / f'crown_post_{session_id}.json', f'crown_post_{session_id}_'),
     ]
     module, report_path, photo_prefix = None, None, None
     for m, p, pref in candidates:
@@ -1144,7 +1199,7 @@ def clear_all():
 
     reports_deleted = 0
     for p in REPORT_FOLDER.glob('*.json'):
-        if p.name.startswith(('endo_', 'xray_')):
+        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
             continue
         try:
             p.unlink()
@@ -1154,7 +1209,7 @@ def clear_all():
 
     photos_deleted = 0
     for p in UPLOAD_FOLDER.glob('*'):
-        if p.name.startswith(('endo_', 'xray_')):
+        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
             continue
         if not p.is_file():
             continue
@@ -1214,7 +1269,11 @@ def analyze_endo():
              'detail': d.detail, 'status': d.status,
              'process_analysis': d.process_analysis, 'targeted_suggestion': d.targeted_suggestion}
             for d in best.dimensions]
-    result = {'session_id': session_id, 'total_score': round(best.total_score,1),
+    _me = _current_student()
+    result = {'session_id': session_id,
+              'student_number': _me['sid'], 'student_name': _me['name'] or '匿名',
+              'student_class': _me['class'] or '未知班级',
+              'total_score': round(best.total_score,1),
               'max_total': best.max_total, 'dimensions': dims,
               'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
                         '中等' if best.total_score>=70 else '及格' if best.total_score>=60 else '不及格'),
@@ -1251,7 +1310,11 @@ def analyze_xray():
              'detail': d.detail, 'status': d.status,
              'process_analysis': d.process_analysis, 'targeted_suggestion': d.targeted_suggestion}
             for d in best.dimensions]
-    result = {'session_id': session_id, 'total_score': round(best.total_score,1),
+    _me = _current_student()
+    result = {'session_id': session_id,
+              'student_number': _me['sid'], 'student_name': _me['name'] or '匿名',
+              'student_class': _me['class'] or '未知班级',
+              'total_score': round(best.total_score,1),
               'max_total': best.max_total, 'dimensions': dims,
               'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
                         '中等' if best.total_score>=70 else '及格' if best.total_score>=60 else '不及格'),
@@ -1264,6 +1327,77 @@ def analyze_xray():
     with open(REPORT_FOLDER / f'xray_{session_id}.json', 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     return jsonify(result)
+
+
+def _run_crown(engine, prefix, tooth, allowed_teeth):
+    """全瓷冠两模块共用：按6个机位字段收图→引擎分析→存前缀JSON。"""
+    tooth = (tooth or '').strip()
+    if tooth not in allowed_teeth:
+        return jsonify({'error': f'牙位无效，仅支持 {"/".join(allowed_teeth)}'}), 400
+    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
+
+    session_id = uuid.uuid4().hex[:8]
+    photos = {}
+    for slot, _label in CROWN_SLOTS.items():
+        f = request.files.get(slot)
+        if f and f.filename and allowed_file(f.filename):
+            ext = f.filename.rsplit('.', 1)[1].lower()
+            fp = UPLOAD_FOLDER / f'{prefix}_{session_id}_{slot}_{int(time.time())}.{ext}'
+            save_image_compressed(f, fp)
+            photos[slot] = str(fp)
+
+    if not photos:
+        return jsonify({'error': '没有有效的照片文件（支持jpg/png/bmp）'}), 400
+
+    try:
+        best = engine.analyze(photos, tooth=tooth)
+    except Exception as e:
+        app.logger.exception('全瓷冠分析异常: %s', e)
+        return jsonify({'error': '分析时出现异常，请按六机位规范重拍清晰照片后重试。'}), 422
+    if not best.dimensions:
+        return jsonify({'error': '未能从照片中识别出预备体，请按六机位规范补全清晰照片后重试。'}), 422
+
+    dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
+             'percentage': round(d.score / d.max_score * 100, 1) if d.max_score > 0 else 0,
+             'detail': d.detail, 'status': d.status, 'unit': d.unit,
+             'process_analysis': d.process_analysis, 'targeted_suggestion': d.targeted_suggestion}
+            for d in best.dimensions]
+    ts = best.total_score
+    result = {
+        'session_id': session_id, 'student_number': student_number,
+        'student_name': student_name, 'student_class': student_class,
+        'tooth': tooth, 'module_title': '前牙全瓷冠预备' if prefix == 'crown_ant' else '后牙全瓷冠预备',
+        'total_score': ts, 'max_total': 100, 'percentage': round(ts, 1),
+        'equipment_score': best.equipment_score,
+        'slots_present': best.slots_present,
+        'grade': ('优秀' if ts >= 90 else '良好' if ts >= 80 else
+                  '中等' if ts >= 70 else '及格' if ts >= 60 else '不及格'),
+        'dimensions': dims,
+        'suggestions': [d.targeted_suggestion for d in best.dimensions
+                        if d.status in ('warning', 'bad') and d.targeted_suggestion][:5],
+        'photo_count': len(photos),
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'overall_assessment': best.overall_assessment,
+        'strengths': best.strengths, 'weaknesses': best.weaknesses,
+        'disclaimer': '本结果由2D照片+硅胶导板近似评估，聚合度/磨除量为参考值，最终以赛场Fair Grader三维扫描为准。',
+    }
+    with open(REPORT_FOLDER / f'{prefix}_{session_id}.json', 'w', encoding='utf-8') as fh:
+        json.dump(result, fh, ensure_ascii=False, indent=2)
+    return jsonify(result)
+
+
+@app.route('/analyze_crown_ant', methods=['POST'])
+def analyze_crown_ant():
+    """前牙全瓷冠预备 AI分析（11/21）"""
+    return _run_crown(前牙全瓷冠评分引擎(), 'crown_ant',
+                      request.form.get('tooth', '11'), ['11', '21'])
+
+
+@app.route('/analyze_crown_post', methods=['POST'])
+def analyze_crown_post():
+    """后牙全瓷冠预备 AI分析（16/26/36/46，不含7号牙）"""
+    return _run_crown(后牙全瓷冠评分引擎(), 'crown_post',
+                      request.form.get('tooth', '16'), ['16', '26', '36', '46'])
 
 
 if __name__ == '__main__':

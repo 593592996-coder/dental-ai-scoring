@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>成绩总览 · 口腔临床训练</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;color:#222}
+.header{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:19px}.header a{color:#fff;font-size:12px;opacity:.9;text-decoration:none}
+.wrap{max-width:1000px;margin:0 auto;padding:18px}
+.bar{background:#fff;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+select{padding:9px 12px;border:1.5px solid #cfd8e3;border-radius:8px;font-size:14px}
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449)}
+.btn.blue{background:linear-gradient(135deg,#2B7BEC,#1B3A5C)}
+.stat{font-size:13px;color:#555;margin-left:auto}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:13.5px}
+th,td{padding:9px 10px;border-bottom:1px solid #eef1f5;text-align:center}
+th{background:#1B3A5C;color:#fff;font-weight:600}
+td.l,th.l{text-align:left}
+tr.miss td{color:#b5bcc6}
+.score{font-weight:700}
+.hi{color:#27ae60}.mid{color:#e67e22}.lo{color:#c0392b}
+.msg{font-size:13px;margin-top:10px;color:#555}
+</style></head>
+<body>
+<div class="header"><h1>📊 学生成绩总览</h1><a href="/">← 返回首页</a></div>
+<div class="wrap">
+  <div class="bar">
+    <label style="font-size:13px;font-weight:700;color:#1B3A5C">班级</label>
+    <select id="klass" onchange="load()"><option value="">全部</option></select>
+    <button class="btn blue" onclick="load()">刷新</button>
+    <button class="btn" onclick="exportXls()">⬇ 按学校格式导出成绩表</button>
+    <span class="stat" id="stat"></span>
+  </div>
+  <table>
+    <thead><tr>
+      <th class="l">学号</th><th class="l">姓名</th><th class="l">行政班</th>
+      <th>病史采集<br><small>→平时</small></th><th>病例分析<br><small>→月考1</small></th>
+      <th>临床思维<br><small>→技能</small></th><th>综合成绩</th><th>最近更新</th>
+    </tr></thead>
+    <tbody id="tb"><tr><td colspan="8">加载中…</td></tr></tbody>
+  </table>
+  <div class="msg" id="msg"></div>
+  <div class="msg">说明：三板块各取所做病例平均分；综合成绩＝病史采集30%＋病例分析30%＋临床思维40%。导出 .xls 回填学校成绩录入表（平时/月考1/技能/综合成绩四列），未完成的学生留空。</div>
+</div>
+<script>
+function cls(v){ if(v==null)return ''; if(v>=85)return 'hi'; if(v>=60)return 'mid'; return 'lo'; }
+function cell(v){ return v==null?'<span style="color:#ccc">—</span>':'<span class="score '+cls(v)+'">'+v+'</span>'; }
+async function load(){
+  const klass=document.getElementById('klass').value;
+  const r=await fetch('/train/api/teacher/grades?class='+encodeURIComponent(klass));
+  const d=await r.json();
+  const sel=document.getElementById('klass');
+  if(sel.options.length<=1){ d.classes.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);}); sel.value=klass; }
+  document.getElementById('stat').textContent=`名册 ${d.total} 人，已交 ${d.submitted} 人`;
+  document.getElementById('tb').innerHTML=d.rows.map(x=>`<tr class="${x.done?'':'miss'}">
+    <td class="l">${x.sid}</td><td class="l">${x.name}</td><td class="l">${x.class||''}</td>
+    <td>${cell(x.history)}</td><td>${cell(x.analysis)}</td><td>${cell(x.reasoning)}</td>
+    <td>${cell(x.final)}</td><td style="font-size:12px">${x.updated||''}</td></tr>`).join('')
+   || '<tr><td colspan="8">暂无数据</td></tr>';
+}
+async function exportXls(){
+  const klass=document.getElementById('klass').value;
+  const r=await fetch('/train/api/teacher/export?class='+encodeURIComponent(klass));
+  const d=await r.json();
+  const msg=document.getElementById('msg');
+  if(!d.ok){ msg.style.color='#c0392b'; msg.textContent='导出失败：'+(d.error||'未知错误'); return; }
+  msg.style.color='#1e8449';
+  msg.innerHTML=`✅ 已回填 ${d.written} 名学生成绩，正在下载… `+(d.extra.length?`（${d.extra.length} 个有成绩但不在本班名册：${d.extra.join('、')}）`:'');
+  window.location.href=d.download;
+}
+load();
+</script>
+</body>
+</html>

@@ -7,3 +7,13 @@ reports/*
 test_*.jpg
 _t.jpg
 consult_logs/
+
+# 临床思维训练：学生名册(隐私)与运行数据不入库
+花名册/
+scores/
+attempts/
+成绩导出/
+admin_password.txt
+
+# 病例照片待导入（隐私，不入库）
+病例照片待导入/

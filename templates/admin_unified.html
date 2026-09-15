@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>教师后台 · 口腔临床训练平台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#eef2f7;color:#222}
+.header{background:linear-gradient(135deg,#16324f,#1f5f8b);color:#fff;padding:13px 22px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:18px}.header a{color:#fff;font-size:12px;margin-left:14px;text-decoration:none;opacity:.9}
+.wrap{max-width:1240px;margin:0 auto;padding:16px}
+.bar{background:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+select{padding:8px 11px;border:1.5px solid #cfd8e3;border-radius:8px;font-size:13px;font-family:inherit}
+.btn{padding:9px 15px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449);font-family:inherit}
+.btn.b{background:linear-gradient(135deg,#2B7BEC,#1B3A5C)}.btn.o{background:linear-gradient(135deg,#e67e22,#d35400)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border-radius:12px;padding:12px 14px}.kpi .v{font-size:24px;font-weight:800;color:#1B3A5C}.kpi .l{font-size:11.5px;color:#888;margin-top:2px}
+.panel{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px}
+.panel h3{font-size:14px;color:#1B3A5C;margin-bottom:10px;border-left:4px solid #1f5f8b;padding-left:8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 6px;border-bottom:1px solid #eef1f5;text-align:center}
+th{background:#1B3A5C;color:#fff;position:sticky;top:0}
+td.l,th.l{text-align:left}tr.clickable{cursor:pointer}tr.clickable:hover{background:#f2f7ff}
+tr.off{color:#b6bdc6}.s{font-weight:700}.s.hi{color:#27ae60}.s.mid{color:#e67e22}.s.lo{color:#c0392b}
+.dist{display:flex;height:22px;border-radius:6px;overflow:hidden;font-size:11px;color:#fff;font-weight:700}.dist div{display:flex;align-items:center;justify-content:center}
+.muted{color:#99a3ad;font-size:12px}
+/* 弹层 */
+#mask{display:none;position:fixed;inset:0;background:rgba(20,40,70,.55);z-index:60;overflow:auto;padding:22px}#mask.show{display:block}
+.sheet{background:#f5f7fa;border-radius:16px;max-width:880px;margin:0 auto;padding:22px}
+.sheet .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.close{background:#c0392b;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:700}
+.maprow{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+.maprow b{width:110px}.note{font-size:12px;color:#777;line-height:1.7;background:#fff;border-radius:8px;padding:9px;margin:8px 0}
+.ev{background:#fff;border-radius:10px;padding:11px;margin:8px 0;font-size:12.5px}
+.tag{display:inline-block;font-size:10.5px;background:#fdecea;color:#c0392b;border-radius:9px;padding:1px 7px;margin:1px}
+a.rl{font-size:11px;color:#2B7BEC}
+</style></head>
+<body>
+<div class="header"><h1>📊 教师后台 · 全板块成绩</h1>
+<span><a href="/">板块首页</a><a href="/train">临床思维训练</a><a href="/admin/logout">退出后台</a></span></div>
+<div class="wrap">
+  <div class="bar">
+    <label style="font-size:13px;font-weight:700;color:#1B3A5C">班级</label>
+    <select id="klass" onchange="load()"><option value="">全部</option></select>
+    <button class="btn b" onclick="load()">刷新</button>
+    <button class="btn" onclick="openWizard('school')">⬇ 导出学校成绩表(.xls)</button>
+    <button class="btn o" onclick="openWizard('full')">⬇ 导出全量总表(.xlsx)</button>
+    <span class="muted" id="tip"></span>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="panel"><h3>综合成绩分布（六板块均分）</h3><div class="dist" id="dist"></div></div>
+  <div class="panel">
+    <h3>学生成绩总表（点姓名看详情/原始作答/报告）</h3>
+    <div style="overflow-x:auto"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+  </div>
+  <div class="panel"><h3>历史成绩待核对（老数据无学号，需人工确认）</h3><div id="unmatched" class="muted"></div></div>
+</div>
+
+<div id="mask"><div class="sheet">
+  <div class="top"><h2 id="mTitle"></h2><button class="close" onclick="mask(false)">关闭</button></div>
+  <div id="mBody"></div>
+</div></div>
+
+<script>
+const _fetch=window.fetch;
+window.fetch=function(...a){return _fetch.apply(this,a).then(r=>{if(r.status===401)location.href='/admin/login';return r;});};
+let D=null; const SCHOOL_COLS=['平时','期末','技能','月考1','月考2','月考3'];
+function sc(v){if(v==null)return '<span class="muted">—</span>';const c=v>=85?'hi':v>=60?'mid':'lo';return `<span class="s ${c}">${v}</span>`;}
+async function load(){
+  const k=document.getElementById('klass').value;
+  D=await (await fetch('/admin/api/overview?class='+encodeURIComponent(k))).json();
+  const sel=document.getElementById('klass');
+  if(sel.options.length<=1){D.classes.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});sel.value=k;}
+  document.getElementById('kpis').innerHTML=
+    `<div class="kpi"><div class="v">${D.total}</div><div class="l">名册人数</div></div>
+     <div class="kpi"><div class="v" style="color:#27ae60">${D.submitted}</div><div class="l">有成绩</div></div>`+
+    D.modules.map(m=>`<div class="kpi"><div class="v">${D.avg[m.key]==null?'—':D.avg[m.key]}</div><div class="l">${m.name}均分</div></div>`).join('');
+  const colors={'优(≥85)':'#27ae60','中(60-84)':'#f39c12','待提高(<60)':'#c0392b','未完成':'#c7ced6'};
+  document.getElementById('dist').innerHTML=Object.entries(D.dist).map(([k,v])=>v?`<div style="flex:${v};background:${colors[k]}" title="${k} ${v}人">${k} ${v}</div>`:'').join('');
+  const heads=['姓名','班级',...D.modules.map(m=>m.name),'综合(均分)'];
+  document.querySelector('#tbl thead').innerHTML='<tr>'+heads.map((h,i)=>`<th class="${i<2?'l':''}">${h}</th>`).join('')+'</tr>';
+  document.querySelector('#tbl tbody').innerHTML=D.rows.map(r=>{
+    const sid=r.sid,name=r.name,cls=r['class']||'';
+    const cells=D.modules.map(m=>`<td>${sc(r[m.key])}</td>`).join('');
+    if(!r.done_modules.length)
+      return `<tr class="off"><td class="l"><b>${name}</b><br><span class="muted">${sid}</span></td><td class="l">${cls}</td>${cells}<td>—</td></tr>`;
+    return `<tr class="clickable" onclick="openStu('${sid}')"><td class="l"><b>${name}</b><br><span class="muted">${sid}</span></td><td class="l">${cls}</td>${cells}<td>${sc(r.composite)}</td></tr>`;
+  }).join('');
+  const u=D.unmatched||[];
+  document.getElementById('unmatched').innerHTML = u.length
+    ? `<div style="margin-bottom:6px;color:#c0392b">${u.length} 条历史成绩只有姓名/班级、无法唯一对应学号（重名或不在名册）：</div>
+       <table><thead><tr><th class="l">姓名</th><th class="l">班级</th><th>板块</th><th>分数</th><th>时间</th></tr></thead><tbody>`+
+      u.map(x=>`<tr><td class="l">${x.name}</td><td class="l">${x['class']||''}</td><td>${x.module_name}</td><td>${x.score}</td><td>${x.ts||''}</td></tr>`).join('')+`</tbody></table>
+       <div class="note">这些是统一登录上线前的老数据。处理方式：让相关学生用学号重新提交一次，或把真实 reports 发我做一对一人工并入。（已自动排除匿名/test 等测试数据 ${D.junk} 条）</div>`
+    : `暂无待核对历史数据（已自动忽略测试数据 ${D.junk} 条）。`;
+}
+
+// ── 导出向导 ──
+function openWizard(kind){
+  const mods=D.modules;
+  let body='';
+  if(kind==='school'){
+    body=`<div class="note">把每个板块的分数填到学校成绩表的哪一列，自行选择；<b>综合成绩</b>列自动＝你勾选板块的<b>简单平均</b>（勾N个各占100/N，没做的不计）。同一列只能放一个板块。</div>`+
+      mods.map(m=>`<div class="maprow"><b>${m.name}</b><select data-mod="${m.key}"><option value="">不导出</option>`+
+        SCHOOL_COLS.map(c=>`<option value="${c}">${c}</option>`).join('')+`</select></div>`).join('')+
+      `<div class="note">按当前所选班级使用对应的学校空表模板（花名册/ 目录）。</div>
+       <button class="btn" onclick="doExportSchool()">生成学校成绩表并下载</button><span id="wz" class="muted" style="margin-left:10px"></span>`;
+  }else{
+    body=`<div class="note">勾选参与综合均分的板块；总表每板块单独一列，不受学校列数限制。综合＝所勾板块简单平均。</div>`+
+      mods.map(m=>`<div class="maprow"><label><input type="checkbox" class="inc" value="${m.key}" checked> ${m.name}</label></div>`).join('')+
+      `<button class="btn o" onclick="doExportFull()">生成全量总表并下载</button><span id="wz" class="muted" style="margin-left:10px"></span>`;
+  }
+  document.getElementById('mTitle').textContent=kind==='school'?'导出向导 · 学校成绩表':'导出向导 · 全量总表';
+  document.getElementById('mBody').innerHTML=body;
+  mask(true);
+}
+function mask(v){document.getElementById('mask').classList.toggle('show',v);}
+async function doExportSchool(){
+  const mapping={};let bad=false;
+  document.querySelectorAll('#mBody select[data-mod]').forEach(sel=>{
+    if(sel.value){if(Object.values(mapping).includes(sel.value)){bad=true;}mapping[sel.value]=sel.dataset.mod;}
+  });
+  if(bad){document.getElementById('wz').textContent='有两个板块选了同一列，请改一下';return;}
+  if(!Object.keys(mapping).length){document.getElementById('wz').textContent='请至少选一个板块';return;}
+  const r=await fetch('/admin/api/export_school',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({class:document.getElementById('klass').value,mapping})}).then(r=>r.json());
+  if(!r.ok){document.getElementById('wz').style.color='#c0392b';document.getElementById('wz').textContent=r.error;return;}
+  location.href=r.download;
+}
+async function doExportFull(){
+  const include=[...document.querySelectorAll('#mBody .inc:checked')].map(x=>x.value);
+  if(!include.length){document.getElementById('wz').textContent='请勾选至少一个板块';return;}
+  const r=await fetch('/admin/api/export_full',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({class:document.getElementById('klass').value,include})}).then(r=>r.json());
+  if(!r.ok){document.getElementById('wz').style.color='#c0392b';document.getElementById('wz').textContent=r.error;return;}
+  location.href=r.download;
+}
+
+// ── 学生详情 ──
+function radar(summary, dimMeta){
+  if(!summary)return '<div class="muted">无思维训练数据</div>';
+  const dims=summary.dims; const keys=Object.keys(dimMeta); const n=keys.length;
+  const cx=140,cy=140,R=95;
+  const pt=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+  let g='';for(let ring=1;ring<=4;ring++)g+='<polygon points="'+keys.map((_,i)=>pt(i,R*ring/4).join(',')).join(' ')+'" fill="none" stroke="#e3e8ef"/>';
+  keys.forEach((k,i)=>{const[x,y]=pt(i,R);g+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e3e8ef"/>`;const[lx,ly]=pt(i,R+24);g+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#555">${dimMeta[k][0]}</text>`;});
+  const poly=keys.map((k,i)=>pt(i,R*Math.max(0,dims[k]||0)/100).join(',')).join(' ');
+  return `<svg width="280" height="280" viewBox="0 0 280 280">${g}<polygon points="${poly}" fill="rgba(43,123,236,.25)" stroke="#2B7BEC" stroke-width="2"/></svg>`;
+}
+async function openStu(sid){
+  const d=await (await fetch('/admin/api/student/'+sid)).json();
+  if(d.error){alert(d.error);return;}
+  const s=d.student;
+  let h=`<div class="ev"><b>${s.name}</b>（${s.sid}）${s['class']?' · '+s['class']:''}</div>`;
+  h+='<div class="ev"><b>各板块成绩（取最高）</b><div style="margin-top:6px">'+
+    D.modules.map(m=>{const v=d.modules[m.key];return `<span style="display:inline-block;min-width:120px">${m.name}：${sc(v)}</span>`;}).join('')+'</div>';
+  const links=Object.entries(d.report_links||{});
+  if(links.length)h+='<div style="margin-top:8px">操作评分报告：'+links.map(([n,u])=>`<a class="rl" target="_blank" href="${u}">${n}报告 ↗</a>`).join('　')+'</div>';
+  h+='</div>';
+  if(d.thinking){
+    const sm=d.thinking.summary;
+    h+=`<div class="ev"><b>临床思维画像</b> <span class="muted">病史${sm.sections.history.avg??'—'} · 分析${sm.sections.analysis.avg??'—'} · 思维${sm.sections.reasoning.avg??'—'} · 被打回${sm.rejects}次</span>
+      <div style="margin-top:6px">${(sm.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')||'<span class="muted">无明显薄弱标签</span>'}</div>
+      <div style="margin-top:8px">${radar(sm,d.thinking.dim_meta)}</div></div>`;
+  }
+  document.getElementById('mTitle').textContent='学生详情';
+  document.getElementById('mBody').innerHTML=h;
+  mask(true);
+}
+load();
+</script>
+</body>
+</html>

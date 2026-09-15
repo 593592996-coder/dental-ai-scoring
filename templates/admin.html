@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>教师后台 · 口腔临床训练</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#eef2f7;color:#222}
+.header{background:linear-gradient(135deg,#16324f,#1f5f8b);color:#fff;padding:13px 22px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:18px}.header a{color:#fff;font-size:12px;opacity:.85;text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+.bar{background:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+select,button{font-family:inherit}
+select{padding:8px 11px;border:1.5px solid #cfd8e3;border-radius:8px;font-size:13px}
+.btn{padding:9px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449)}
+.btn.b{background:linear-gradient(135deg,#2B7BEC,#1B3A5C)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border-radius:12px;padding:13px 15px}
+.kpi .v{font-size:26px;font-weight:800;color:#1B3A5C}.kpi .l{font-size:12px;color:#888;margin-top:2px}
+.kpi .v.g{color:#27ae60}.kpi .v.o{color:#e67e22}.kpi .v.r{color:#c0392b}
+.panel{background:#fff;border-radius:12px;padding:15px;margin-bottom:14px}
+.panel h3{font-size:14px;color:#1B3A5C;margin-bottom:10px;border-left:4px solid #2B7BEC;padding-left:8px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:860px){.cols2{grid-template-columns:1fr}}
+.minibar{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12.5px}
+.minibar .lab{width:104px;color:#555}.minibar .track{flex:1;height:12px;background:#eef1f5;border-radius:6px;overflow:hidden}
+.minibar .fill{height:100%;background:linear-gradient(90deg,#2B7BEC,#27ae60)}
+.minibar .val{width:34px;text-align:right;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 7px;border-bottom:1px solid #eef1f5;text-align:center;white-space:nowrap}
+th{background:#1B3A5C;color:#fff;font-weight:600;position:sticky;top:0}
+td.l,th.l{text-align:left;white-space:normal}
+tr.off{color:#b6bdc6}
+tr.clickable{cursor:pointer}tr.clickable:hover{background:#f2f7ff}
+.tag{display:inline-block;font-size:10.5px;background:#fdecea;color:#c0392b;border-radius:9px;padding:1px 7px;margin:1px}
+.s{font-weight:700}.s.hi{color:#27ae60}.s.mid{color:#e67e22}.s.lo{color:#c0392b}
+.dist{display:flex;height:22px;border-radius:6px;overflow:hidden;font-size:11px;color:#fff;font-weight:700}
+.dist div{display:flex;align-items:center;justify-content:center}
+/* 弹层 */
+#mask{display:none;position:fixed;inset:0;background:rgba(20,40,70,.5);z-index:50;overflow:auto;padding:24px}
+#mask.show{display:block}
+.sheet{background:#f5f7fa;border-radius:16px;max-width:900px;margin:0 auto;padding:22px}
+.sheet .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sheet h2{font-size:19px;color:#1B3A5C}
+.close{background:#c0392b;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:700}
+.radar-wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.ev{background:#fff;border-radius:12px;padding:14px;margin:10px 0}
+.ev .hd{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#1B3A5C;margin-bottom:6px;flex-wrap:wrap;gap:6px}
+.ev .cc{font-size:12px;color:#888;margin-bottom:8px}
+.ans{background:#f8fafd;border-left:3px solid #2B7BEC;border-radius:5px;padding:7px 9px;font-size:12.5px;margin:5px 0;white-space:pre-wrap}
+.ok{color:#27ae60;font-weight:700}.no{color:#c0392b;font-weight:700}
+details{margin-top:6px}summary{cursor:pointer;font-size:12px;color:#2B7BEC}
+.qa{font-size:12px;margin:4px 0;padding:5px 8px;border-radius:6px}.qa.q{background:#eaf1fb}.qa.a{background:#f1f3f6}
+.pill{font-size:11px;border-radius:10px;padding:2px 9px;background:#e8f0fe;color:#1B5;font-weight:700}
+.muted{color:#99a3ad;font-size:12px}
+</style></head>
+<body>
+<div class="header"><h1>📊 教师后台 · 学情与成绩</h1><span><a href="/admin/logout" style="margin-right:14px">退出后台</a><a href="/">← 返回训练首页</a></span></div>
+<div class="wrap">
+  <div class="bar">
+    <label style="font-size:13px;font-weight:700;color:#1B3A5C">班级</label>
+    <select id="klass" onchange="load()"><option value="">全部</option></select>
+    <button class="btn b" onclick="load()">刷新</button>
+    <button class="btn" onclick="exportXls()">⬇ 导出学校格式成绩表</button>
+    <span class="muted" id="loadtip"></span>
+  </div>
+
+  <div class="cards" id="kpis"></div>
+  <div class="panel"><h3>综合成绩分布</h3><div class="dist" id="dist"></div></div>
+
+  <div class="cols2">
+    <div class="panel"><h3>全班临床思维六维（百分制，越短越弱）</h3><div id="dims"></div></div>
+    <div class="panel"><h3>病史采集 · 高频漏问项</h3><div id="miss"></div></div>
+  </div>
+
+  <div class="panel">
+    <h3>学生明细（点姓名看个人画像与原始作答）</h3>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th class="l">姓名</th><th>登录</th><th>最近活跃</th>
+        <th>病史<br>题数</th><th>分析<br>题数</th><th>思维<br>题数</th>
+        <th>病史</th><th>分析</th><th>思维</th><th>综合</th><th>打回</th><th class="l">薄弱点</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div id="mask"><div class="sheet">
+  <div class="top"><h2 id="stTitle"></h2><button class="close" onclick="document.getElementById('mask').classList.remove('show')">关闭</button></div>
+  <div id="stBody"></div>
+</div></div>
+
+<script>
+// 会话失效（未输后台密码）→ 跳登录
+const _fetch=window.fetch;
+window.fetch=function(...a){return _fetch.apply(this,a).then(r=>{if(r.status===401){location.href='/admin/login';}return r;});};
+let LABELS={};
+function sc(v){ if(v==null)return '<span class="muted">—</span>'; let c=v>=85?'hi':v>=60?'mid':'lo'; return `<span class="s ${c}">${v}</span>`; }
+async function load(){
+  const klass=document.getElementById('klass').value;
+  const tip=document.getElementById('loadtip'); tip.textContent='加载中…';
+  const d=await (await fetch('/admin/api/overview?class='+encodeURIComponent(klass))).json();
+  LABELS=d.case_labels||{};
+  const sel=document.getElementById('klass');
+  if(sel.options.length<=1){d.classes.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});sel.value=klass;}
+  tip.textContent='';
+  const a=d.avg;
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="v">${d.total}</div><div class="l">名册人数</div></div>
+    <div class="kpi"><div class="v g">${d.active}</div><div class="l">已参与（登录/做题）</div></div>
+    <div class="kpi"><div class="v ${a.history>=80?'g':a.history>=60?'o':'r'}">${a.history??'—'}</div><div class="l">病史采集均分</div></div>
+    <div class="kpi"><div class="v ${a.analysis>=80?'g':a.analysis>=60?'o':'r'}">${a.analysis??'—'}</div><div class="l">病例分析均分</div></div>
+    <div class="kpi"><div class="v ${a.reasoning>=80?'g':a.reasoning>=60?'o':'r'}">${a.reasoning??'—'}</div><div class="l">临床思维均分</div></div>
+    <div class="kpi"><div class="v ${a.final>=80?'g':a.final>=60?'o':'r'}">${a.final??'—'}</div><div class="l">综合均分</div></div>`;
+  const dist=d.dist, colors={'优(≥85)':'#27ae60','中(60-84)':'#f39c12','待提高(<60)':'#c0392b','未完成':'#c7ced6'};
+  document.getElementById('dist').innerHTML=Object.entries(dist).map(([k,v])=>
+    v?`<div style="flex:${v};background:${colors[k]}" title="${k} ${v}人">${k} ${v}</div>`:'').join('');
+  document.getElementById('dims').innerHTML=Object.entries(d.weakness.dims).map(([k,x])=>{
+    const v=x.avg??0;
+    return `<div class="minibar"><div class="lab">${x.name}</div><div class="track"><div class="fill" style="width:${v}%"></div></div><div class="val">${x.avg==null?'—':x.avg}</div></div>`;
+  }).join('') + `<div class="muted" style="margin-top:6px">样本：${d.weakness.history_sample} 人次临床思维</div>`;
+  const cm=d.weakness.top_critical_missed, mi=d.weakness.top_missed;
+  document.getElementById('miss').innerHTML=
+    (cm.length?`<div style="font-size:12px;color:#c0392b;font-weight:700;margin-bottom:4px">关键项漏问</div>`+
+      cm.slice(0,5).map(([t,n])=>`<div class="minibar"><div class="lab" style="width:150px">${t}</div><div class="track"><div class="fill" style="width:${Math.min(100,n*12)}%;background:#c0392b"></div></div><div class="val">${n}</div></div>`).join(''):'<div class="muted">暂无</div>')+
+    (mi.length?`<div style="font-size:12px;color:#888;font-weight:700;margin:8px 0 4px">一般项漏问</div>`+
+      mi.slice(0,6).map(([t,n])=>`<div class="minibar"><div class="lab" style="width:150px">${t}</div><div class="track"><div class="fill" style="width:${Math.min(100,n*10)}%;background:#f39c12"></div></div><div class="val">${n}</div></div>`).join(''):'');
+  document.getElementById('tb').innerHTML=d.rows.map(r=> r.active?`
+    <tr class="clickable" onclick="openStu('${r.sid}')">
+      <td class="l"><b>${r.name}</b><br><span class="muted">${r.sid}</span></td>
+      <td>${r.logins}</td><td style="font-size:11px">${r.last_active||''}</td>
+      <td>${r.h_cases}</td><td>${r.a_cases}</td><td>${r.r_cases}</td>
+      <td>${sc(r.history)}</td><td>${sc(r.analysis)}</td><td>${sc(r.reasoning)}</td><td>${sc(r.final)}</td>
+      <td>${r.rejects||0}</td>
+      <td class="l">${(r.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</td>
+    </tr>`:`
+    <tr class="off"><td class="l"><b>${r.name}</b><br><span class="muted">${r.sid}</span></td>
+      <td>0</td><td>—</td><td colspan="7">还未登录 / 未做题</td><td></td><td class="l"></td></tr>`).join('');
+}
+async function exportXls(){
+  const klass=document.getElementById('klass').value;
+  const d=await (await fetch('/train/api/teacher/export?class='+encodeURIComponent(klass))).json();
+  if(!d.ok){alert('导出失败：'+(d.error||''));return;}
+  alert('已回填 '+d.written+' 名学生，开始下载。'+(d.extra.length?'\n不在名册：'+d.extra.join('、'):''));
+  window.location.href=d.download;
+}
+
+// ───────── 个人画像 ─────────
+function radar(dims){
+  const meta=dims.__meta; const keys=Object.keys(meta); const n=keys.length;
+  const cx=150,cy=150,R=105;
+  const pt=(i,r)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+  let grid='';
+  for(let ring=1;ring<=4;ring++){
+    grid+='<polygon points="'+keys.map((_,i)=>pt(i,R*ring/4).join(',')).join(' ')+
+      '" fill="none" stroke="#e3e8ef" stroke-width="1"/>';
+  }
+  keys.forEach((k,i)=>{const [x,y]=pt(i,R);grid+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e3e8ef"/>`;
+    const [lx,ly]=pt(i,R+26);grid+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#555">${meta[k][0]}</text>`;});
+  const poly=keys.map((k,i)=>{const v=Math.max(0,dims[k]||0);return pt(i,R*v/100).join(',');}).join(' ');
+  return `<svg width="300" height="300" viewBox="0 0 300 300">${grid}
+    <polygon points="${poly}" fill="rgba(43,123,236,.25)" stroke="#2B7BEC" stroke-width="2"/>
+    ${keys.map((k,i)=>{const [x,y]=pt(i,R*Math.max(0,dims[k]||0)/100);return `<circle cx="${x}" cy="${y}" r="3" fill="#2B7BEC"/>`;}).join('')}
+    </svg>`;
+}
+function evHistory(e){
+  return `<div class="ans">得分 <b>${e.score}</b>｜覆盖 ${e.covered}/${e.total}｜提问 ${e.question_count} 句</div>`+
+    (e.critical_missed&&e.critical_missed.length?`<div class="ans" style="border-left-color:#c0392b;color:#c0392b">关键项漏问：${e.critical_missed.join('、')}</div>`:'')+
+    (e.transcript&&e.transcript.length?`<details><summary>查看问诊记录（${e.transcript.length}句）</summary>`+
+      e.transcript.map(t=>`<div class="qa q">问：${t.q}</div><div class="qa a">答：${t.a}</div>`).join('')+'</details>':'');
+}
+function evAnalysis(e){
+  const a=e.answers||{};
+  const rows=(title,rows)=>rows&&rows.length?`<div style="font-size:12px;font-weight:700;margin-top:6px">${title}</div>`+
+    rows.map(r=>`<div style="font-size:12px">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}${r.name?' — '+r.point:''}</div>`).join(''):'';
+  return `<div class="ans">得分 <b>${e.score}</b>（诊断${e.scores.diagnosis}/30 依据${e.scores.basis}/30 鉴别${e.scores.differential}/20 治疗${e.scores.treatment}/20）</div>
+    <div class="ans">他的诊断：${a.diagnosis||'（空）'}<br>正确诊断：${e.correct_diagnosis}</div>
+    <div class="ans">诊断依据：${a.basis||'（空）'}</div>
+    <div class="ans">鉴别诊断：${a.differential||'（空）'}</div>
+    <div class="ans">治疗设计：${a.treat||'（空）'}</div>
+    ${rows('依据得分点',e.basis_rows)}${rows('鉴别对照',e.diff_rows)}${rows('治疗得分点',e.treat_rows)}`;
+}
+function evReasoning(e){
+  const dm=e.dims||{};
+  const dimBars=Object.entries(window.__dimmeta||{}).map(([k,m])=>{
+    const v=dm[k]||0;return `<div class="minibar"><div class="lab">${m[0]}</div><div class="track"><div class="fill" style="width:${v/m[1]*100}%"></div></div><div class="val">${v}/${m[1]}</div></div>`;}).join('');
+  return `<div class="ans">得分 <b>${e.score}</b>｜被打回 ${e.rejects||0} 次｜提问 ${e.question_count} 句｜检查：${(e.exams_done||[]).join('、')||'—'}</div>
+    <div class="ans">他的诊断：${e.diagnosis||'（空）'}<br>鉴别：${e.differential||'（空）'}</div>
+    ${dimBars}
+    <div style="font-size:12px;font-weight:700;margin-top:6px">关键决策</div>`+
+    (e.decisions||[]).map(x=>`<div style="font-size:12px">${x.your===x.correct?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${x.q}<br><span class="muted">他答：${x.your||'（空）'}｜应：${x.correct}</span></div>`).join('')+
+    `<details><summary>查看证据勾选</summary>`+
+    (e.evidence||[]).map(x=>`<div style="font-size:12px">${x.picked?'<span class="ok">✓选</span>':'<span class="no">✗漏</span>'} [${x.id}${x.weight===3?'·关键':''}] ${x.text}</div>`).join('')+'</details>';
+}
+async function openStu(sid){
+  const d=await (await fetch('/admin/api/student/'+sid)).json();
+  if(d.error){alert(d.error);return;}
+  window.__dimmeta=d.dim_meta;
+  const s=d.summary;
+  document.getElementById('stTitle').textContent=`${s.name}（${s.sid}） · ${s.class||''}`;
+  const dims=Object.assign({},s.dims,{__meta:d.dim_meta});
+  let html=`<div class="radar-wrap"><div>${radar(dims)}</div>
+    <div style="flex:1;min-width:240px">
+      <div style="margin-bottom:8px">${(s.tags||[]).map(t=>`<span class="tag" style="font-size:12px;padding:3px 10px">${t}</span>`).join('')||'<span class="muted">暂无明显薄弱标签</span>'}</div>
+      <div class="minibar"><div class="lab">病史采集</div><div class="track"><div class="fill" style="width:${s.sections.history.avg||0}%"></div></div><div class="val">${s.sections.history.avg??'—'}</div></div>
+      <div class="minibar"><div class="lab">病例分析</div><div class="track"><div class="fill" style="width:${s.sections.analysis.avg||0}%"></div></div><div class="val">${s.sections.analysis.avg??'—'}</div></div>
+      <div class="minibar"><div class="lab">临床思维</div><div class="track"><div class="fill" style="width:${s.sections.reasoning.avg||0}%"></div></div><div class="val">${s.sections.reasoning.avg??'—'}</div></div>
+      <div class="muted" style="margin-top:8px">登录 ${s.logins} 次｜做题 ${s.attempt_count} 次｜最近 ${s.last_active||'—'}</div>
+    </div></div>
+    <h3 style="font-size:14px;color:#1B3A5C;margin:16px 0 6px">作答时间线（每题取最新提交）</h3>`;
+  const km={login:['登录',''],history_score:['病史采集','evHistory'],analysis_score:['病例分析','evAnalysis'],reasoning_score:['临床思维','evReasoning']};
+  // 时间倒序
+  d.events.slice().reverse().forEach(e=>{
+    const m=km[e.kind]; if(!m)return;
+    if(e.kind==='login'){return;}
+    html+=`<div class="ev"><div class="hd"><span><span class="pill">${m[0]}</span> ${e.case_label||''}</span><span class="muted">${e.ts}</span></div>${window[m[1]](e)}</div>`;
+  });
+  if(!d.events.some(e=>e.kind!=='login')) html+='<div class="muted">还没有做题记录。</div>';
+  document.getElementById('stBody').innerHTML=html;
+  document.getElementById('mask').classList.add('show');
+}
+load();
+</script>
+</body>
+</html>

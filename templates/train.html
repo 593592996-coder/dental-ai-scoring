@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>思维训练 · 口腔临床训练</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh;color:#222}
+.header{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:19px}.header a{color:#fff;font-size:12px;opacity:.85;text-decoration:none}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+/* 板块选择 */
+.modules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.mod{background:#fff;border-radius:12px;padding:16px;cursor:pointer;border:2px solid transparent;transition:.2s}
+.mod:hover{border-color:#2B7BEC;transform:translateY(-2px)}
+.mod .n{font-size:24px;font-weight:800;color:#2B7BEC}.mod h3{font-size:15px;margin:4px 0}.mod p{font-size:12px;color:#777;line-height:1.5}
+.mod .wt{font-size:11px;color:#27ae60;font-weight:700;margin-top:6px}
+.case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.case-card{background:#fff;border-radius:10px;padding:12px;border:1.5px solid #e0e0e0;cursor:pointer;transition:.2s}
+.case-card:hover{border-color:#2B7BEC;background:#f5f9ff}
+.case-card .t{font-weight:700;font-size:14px}
+.case-card .tag{display:inline-block;font-size:11px;background:#e8f0fe;color:#1B5;font-weight:700;padding:2px 8px;border-radius:10px;margin:6px 4px 0 0}
+.case-card .lv{font-size:11px;color:#e67e22}
+.case-card.off{opacity:.55}
+.section-title{font-size:15px;font-weight:700;margin:18px 0 10px;color:#1B3A5C;border-left:4px solid #2B7BEC;padding-left:8px}
+/* 聊天 */
+.cc-box{background:#fff;border-radius:12px;padding:14px}
+.cc{font-size:13px;background:linear-gradient(135deg,#fef9e7,#fff8e1);border:1px solid #f9e79f;border-radius:8px;padding:10px;margin-bottom:10px;font-weight:600;color:#8a6d3b}
+.chat{max-height:300px;overflow-y:auto;padding:6px}
+.msg{margin:6px 0;padding:9px 13px;border-radius:10px;font-size:13px;line-height:1.5;max-width:85%;white-space:pre-wrap}
+.msg.st{background:linear-gradient(135deg,#2B7BEC,#1B3A5C);color:#fff;margin-left:auto;text-align:right}
+.msg.pt{background:#f2f4f7;border:1px solid #e3e7ee;margin-right:auto}
+.cinp{display:flex;gap:8px;margin-top:10px}
+.cinp input{flex:1;padding:10px 14px;border:2px solid #2B7BEC;border-radius:10px;font-size:14px}
+.btn{padding:10px 18px;background:linear-gradient(135deg,#2B7BEC,#1B3A5C);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:13px}
+.btn.ghost{background:#fff;color:#2B7BEC;border:1.5px solid #2B7BEC}
+.btn.green{background:linear-gradient(135deg,#27ae60,#1e8449)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+/* 检查 */
+.exam-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.exam-btn{background:#fff;border:1.5px solid #d5dbe3;border-radius:8px;padding:9px;cursor:pointer;font-size:13px;text-align:left}
+.exam-btn:hover{border-color:#2B7BEC}
+.exam-btn.done{background:#e8f8f0;border-color:#27ae60}
+.finding{background:#f5f9ff;border-left:3px solid #2B7BEC;border-radius:6px;padding:9px;font-size:12.5px;margin:6px 0;white-space:pre-wrap}
+.purpose{background:#fef9e7;border-left:3px solid #f39c12;border-radius:6px;padding:8px;font-size:12px;color:#8a6d3b;margin:4px 0}
+/* 证据勾选 */
+.ev-list{max-height:280px;overflow-y:auto;border:1px solid #e3e7ee;border-radius:8px;padding:8px;margin:8px 0}
+.ev{display:flex;gap:8px;padding:7px;border-bottom:1px solid #f0f2f5;font-size:13px;cursor:pointer}
+.ev:hover{background:#f5f9ff}.ev input{margin-top:3px}
+.ev .w3{color:#c0392b;font-weight:700}.ev .src{color:#888;font-size:11px}
+.dec{background:#fff;border:1.5px solid #e3e7ee;border-radius:8px;padding:10px;margin:8px 0}
+.dec label{font-size:13px;font-weight:600;display:block;margin-bottom:4px}
+.dec input,.dec textarea{width:100%;padding:8px;border:1.5px solid #d5dbe3;border-radius:7px;font-size:13px;font-family:inherit}
+textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;border-radius:8px;font-size:13px;font-family:inherit}
+.field{margin:10px 0}.field label{font-size:13px;font-weight:700;display:block;margin-bottom:4px;color:#1B3A5C}
+/* 结果 */
+.score-big{font-size:42px;font-weight:800;color:#2B7BEC;text-align:center;margin:6px 0}
+.score-big small{font-size:15px;color:#999}
+.bar-row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12.5px}
+.bar-row .lab{width:130px;color:#555}.bar-row .track{flex:1;height:14px;background:#eee;border-radius:7px;overflow:hidden}
+.bar-row .fill{height:100%;background:linear-gradient(90deg,#2B7BEC,#27ae60)}
+.bar-row .val{width:38px;text-align:right;font-weight:700}
+.ok{color:#27ae60;font-weight:700}.no{color:#c0392b;font-weight:700}
+.block{background:#fdecea;border:1px solid #f5b7b1;border-left:4px solid #c0392b;border-radius:8px;padding:10px;margin:8px 0;font-size:13px;color:#922}
+.ans{background:#eafaf1;border:1px solid #abebc6;border-radius:8px;padding:10px;font-size:13px;margin:8px 0;white-space:pre-wrap}
+.material{background:#f8f9fb;border:1px solid #e3e7ee;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:300px;overflow-y:auto}
+.phase-steps{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
+.pstep{font-size:12px;padding:5px 10px;border-radius:14px;background:#eee;color:#999}
+.pstep.on{background:#2B7BEC;color:#fff}.pstep.dn{background:#d5f5e3;color:#1e8449}
+.hidden{display:none}
+.back{font-size:12px;color:#2B7BEC;cursor:pointer;margin-bottom:8px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="header"><h1>🧠 临床思维训练</h1><span style="display:inline-flex;align-items:center;gap:12px"><span id="idChipSlot"></span><a href="/admin">教师后台</a><a href="/">← 返回板块</a></span></div>
+<div class="wrap">
+
+  <!-- 首页：板块+病例 -->
+  <div id="home">
+    <div class="modules">
+      <div class="mod" onclick="pickModule('history')"><div class="n">①</div><h3>病史采集</h3><p>给主诉，向病人提问，练问诊完整性、条理性。</p><div class="wt">权重 30%</div></div>
+      <div class="mod" onclick="pickModule('analysis')"><div class="n">②</div><h3>病例分析</h3><p>给完整病例，书面作答诊断/依据/鉴别/治疗。</p><div class="wt">权重 30%</div></div>
+      <div class="mod" onclick="pickModule('reasoning')"><div class="n">③</div><h3>临床思维训练</h3><p>动态问诊检查，逆向逼问，练诊断推理与决策。</p><div class="wt">权重 40%</div></div>
+    </div>
+    <div class="section-title">选择病例</div>
+    <div style="font-size:12px;color:#999;margin:-4px 0 8px">仅显示主诉症状，不提示诊断；灰显为超纲/执业范畴</div>
+    <div class="case-grid" id="caseGrid"></div>
+    <div class="section-title">综合成绩</div>
+    <div style="background:#fff;border-radius:10px;padding:14px;text-align:center">
+      <button class="btn green" onclick="showFinal()">查看我的综合总分</button>
+      <div id="finalBox" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- 工作区 -->
+  <div id="work" class="hidden">
+    <span class="back" onclick="goHome()">← 返回选病例</span>
+    <h2 id="workTitle" style="font-size:17px;color:#1B3A5C;margin-bottom:8px"></h2>
+    <div id="workBody"></div>
+  </div>
+
+</div>
+
+<script>
+let CASES = {};
+let curModule = null, curCase = null;
+
+async function init(){
+  const r = await fetch('/train/api/cases'); CASES = await r.json();
+  const grid = document.getElementById('caseGrid');
+  grid.innerHTML = Object.entries(CASES).map(([id,c])=>`
+    <div class="case-card ${c.in_scope?'':'off'}" onclick="openCase('${id}')">
+      <div class="t">🦷 ${c.chief_complaint||c.title}</div>
+      <div class="lv" style="margin-top:6px">${'★'.repeat(c.level)} 难度 ${c.in_scope?'':'（超纲·执业）'}</div>
+    </div>`).join('');
+}
+function pickModule(m){ curModule=m; alertOpenHint(); }
+function alertOpenHint(){ /* 选病例时进入对应板块 */ }
+
+function openCase(id){
+  curCase = id;
+  // 若已选板块则直接进，否则默认进该病例支持的板块
+  const m = curModule || 'reasoning';
+  curModule = null;
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('work').classList.remove('hidden');
+  document.getElementById('workTitle').textContent = '🦷 ' + (CASES[id].chief_complaint || CASES[id].title);
+  if(m==='history') renderHistory();
+  else if(m==='analysis') renderAnalysis();
+  else renderReasoning();
+}
+function goHome(){ document.getElementById('work').classList.add('hidden'); document.getElementById('home').classList.remove('hidden'); }
+
+// ─────────── 板块1 病史采集 ───────────
+async function renderHistory(){
+  const body = document.getElementById('workBody');
+  body.innerHTML = `<div class="phase-steps"><span class="pstep on">① 问诊采集</span><span class="pstep">② 评分</span></div>
+    <div class="cc-box"><div class="cc" id="hCc">加载中…</div>
+      <div class="chat" id="hChat"></div>
+      <div class="cinp"><input id="hInput" placeholder="向患者提问，如：哪里疼？疼多久了？" onkeydown="if(event.key==='Enter')hSend()">
+      <button class="btn" onclick="hSend()">提问</button>
+      <button class="btn green" onclick="hScore()">完成采集评分</button></div>
+    </div>
+    <div id="hResult"></div>`;
+  const r = await fetch(`/train/api/history/start/${curCase}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d = await r.json();
+  if(d.error){ body.innerHTML = `<div class="block">${d.error}</div>`; return; }
+  document.getElementById('hCc').textContent = '🦷 主诉：'+d.chief_complaint+'（'+d.patient.gender+'，'+d.patient.age+'岁）';
+  addMsg('pt','你好，哪里不舒服？请详细说说。','hChat');
+}
+function addMsg(who,text,elId){
+  const d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+  document.getElementById(elId).appendChild(d); d.scrollIntoView({behavior:'smooth'});
+}
+async function hSend(){
+  const inp=document.getElementById('hInput'); const q=inp.value.trim(); if(!q)return;
+  addMsg('st',q,'hChat'); inp.value='';
+  const r=await fetch('/train/api/history/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:q})});
+  const d=await r.json(); addMsg('pt',d.reply,'hChat');
+}
+async function hScore(){
+  const r=await fetch('/train/api/history/score',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  let html=`<div class="cc-box" style="margin-top:12px"><div class="score-big">${d.score}<small> /100</small></div>
+    <div style="text-align:center;font-size:13px;color:#777">问到 ${d.covered}/${d.total} 个病史要点，共提问 ${d.question_count} 句</div>`;
+  d.cat_stats.forEach(c=>{ html+=`<div class="bar-row"><div class="lab">${c.cat}</div><div class="track"><div class="fill" style="width:${c.pct}%"></div></div><div class="val">${c.hit}/${c.total}</div></div>`; });
+  if(d.critical_missed.length) html+=`<div class="block">⚠️ 关键项遗漏（加重扣分）：${d.critical_missed.join('、')}</div>`;
+  html+=`<div class="section-title">问诊要点对照</div>`;
+  d.detail.forEach(cat=>{ html+=`<div style="margin:6px 0"><b style="font-size:13px">${cat.cat}</b><div style="font-size:12.5px;margin-top:3px">`+
+    cat.items.map(i=>`<span style="margin-right:10px">${i.covered?'<span class="ok">✓</span>':'<span class="no">✗</span>'}${i.label}${i.critical?'🔴':''}</span>`).join('')+`</div></div>`; });
+  html+=`</div>`;
+  document.getElementById('hResult').innerHTML=html;
+}
+
+// ─────────── 板块2 病例分析 ───────────
+let analysisData=null;
+async function renderAnalysis(){
+  const body=document.getElementById('workBody');
+  body.innerHTML=`<div class="cc-box"><div class="cc">阅读下面病例，书面完成：诊断、诊断依据、鉴别诊断、治疗设计。</div>
+    <div class="material" id="aMaterial">加载中…</div>
+    <div class="field"><label>诊断</label><input id="aDiag" placeholder="如：36急性牙髓炎"></div>
+    <div class="field"><label>诊断依据（逐条）</label><textarea id="aBasis" placeholder="把支持诊断的症状、体征、影像依据写出来"></textarea></div>
+    <div class="field"><label>鉴别诊断（需要排除哪些病）</label><textarea id="aDiff" placeholder="如：急性龈乳头炎、三叉神经痛…"></textarea></div>
+    <div class="field"><label>治疗设计</label><textarea id="aTreat" placeholder="治疗原则与方案"></textarea></div>
+    <button class="btn green" onclick="aScore()">提交评分</button>
+    <div id="aResult"></div></div>`;
+  const r=await fetch(`/train/api/analysis/${curCase}`); const d=await r.json();
+  if(d.error){ body.innerHTML=`<div class="block">${d.error}</div>`; return; }
+  analysisData=d; document.getElementById('aMaterial').textContent=d.material;
+}
+async function aScore(){
+  const payload={diagnosis:val('aDiag'),basis:val('aBasis'),differential:val('aDiff'),treatment:val('aTreat')};
+  const r=await fetch(`/train/api/analysis/score/${curCase}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const d=await r.json(); const s=d.scores;
+  let html=`<div style="margin-top:14px"><div class="score-big">${s.total}<small> /100</small></div>`;
+  [['诊断',s.diagnosis,30],['诊断依据',s.basis,30],['鉴别诊断',s.differential,20],['治疗设计',s.treatment,20]].forEach(([n,v,m])=>{
+    html+=`<div class="bar-row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/m*100}%"></div></div><div class="val">${v}/${m}</div></div>`;});
+  html+=`<div class="section-title">诊断依据 · 得分点</div>`+
+    d.basis_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}</div>`).join('');
+  html+=`<div class="section-title">鉴别诊断 · 标准答案（考试要求）</div>`+
+    d.diff_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} <b>${r.name}</b>——${r.point}</div>`).join('');
+  if(d.correct.differential_clinical.length) html+=`<div style="font-size:12px;color:#888;margin-top:4px">临床加做鉴别：${d.correct.differential_clinical.join('、')}</div>`;
+  html+=`<div class="section-title">治疗设计 · 得分点</div>`+
+    d.treat_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}</div>`).join('');
+  html+=`<div class="ans"><b>✅ 正确诊断：</b>${d.correct.diagnosis}</div></div>`;
+  document.getElementById('aResult').innerHTML=html;
+}
+function val(id){return document.getElementById(id).value;}
+
+// ─────────── 板块3 临床思维 ───────────
+let rs=null, rsPhase=0;
+async function renderReasoning(){
+  const body=document.getElementById('workBody');
+  body.innerHTML=`<div class="phase-steps" id="rsSteps">
+    <span class="pstep on">1问诊</span><span class="pstep">2检查</span><span class="pstep">3诊断</span><span class="pstep">4治疗</span><span class="pstep">5复盘</span></div>
+  <div id="rsBody"><div class="cc-box">加载中…</div></div>`;
+  const r=await fetch(`/train/api/reasoning/start/${curCase}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  rs=await r.json();
+  if(rs.error){ body.innerHTML=`<div class="block">${rs.error}</div>`; return; }
+  rsPhase=1; showRsHistory();
+}
+function setStep(n){document.querySelectorAll('#rsSteps .pstep').forEach((s,i)=>{s.className='pstep'+(i<n-1?' dn':i===n-1?' on':'');});}
+function showRsHistory(){
+  setStep(1);
+  document.getElementById('rsBody').innerHTML=`<div class="cc-box">
+    <div class="cc">🦷 ${rs.chief_complaint}（${rs.patient.gender}，${rs.patient.age}岁）<br><span style="font-weight:400;font-size:12px">像真实门诊一样提问。<b>关键：问清症状特点、有没有自发痛/夜间痛、用药、过敏史。</b></span></div>
+    <div class="chat" id="rsChat"></div>
+    <div class="cinp"><input id="rsInput" placeholder="向患者提问…" onkeydown="if(event.key==='Enter')rsSend()">
+    <button class="btn" onclick="rsSend()">提问</button>
+    <button class="btn green" onclick="showRsExam()">进入检查 →</button></div></div>`;
+  addMsg('pt','你好，哪里不舒服？','rsChat');
+}
+async function rsSend(){
+  const inp=document.getElementById('rsInput');const q=inp.value.trim();if(!q)return;
+  addMsg('st',q,'rsChat');inp.value='';
+  const r=await fetch('/train/api/reasoning/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:q})});
+  const d=await r.json();addMsg('pt',d.reply,'rsChat');
+}
+async function showRsExam(){
+  setStep(2);
+  const b=document.getElementById('rsBody');
+  b.innerHTML=`<div class="cc-box"><div class="cc">选择并完成口腔检查。<b>每做一项，先想：你为什么做它、想验证/排除什么？</b></div>
+    <div class="exam-list" id="examList">${rs.exam_names.map(n=>`<button class="exam-btn" id="ex_${n}" onclick="doExam('${n}')">🔍 ${n}</button>`).join('')}</div>
+    <div id="examFindings"></div>
+    <button class="btn green" style="margin-top:10px" onclick="showRsDiagnose()">进入诊断 →</button></div>`;
+}
+async function doExam(name){
+  const r=await fetch('/train/api/reasoning/exam',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item:name})});
+  const d=await r.json();
+  const btn=document.getElementById('ex_'+name); if(btn){btn.classList.add('done');btn.disabled=true;}
+  let html=`<div class="finding"><b>🔍 ${name} 结果：</b>\n${d.finding}</div>`;
+  if(d.purpose) html+=`<div class="purpose">💡 这项检查的意义：${d.purpose}</div>`;
+  const box=document.getElementById('examFindings'); box.innerHTML=html+box.innerHTML;
+}
+function showRsDiagnose(){
+  setStep(3);
+  let evHtml=rs.evidence.map(e=>`<label class="ev"><input type="checkbox" value="${e.id}">
+    <span><span class="${e.weight===3?'w3':''}">[${e.id}]</span> ${e.text} <span class="src">（${e.source}${e.weight===3?'·决定性证据':''}）</span></span></label>`).join('');
+  let decHtml=rs.key_decisions.map(d=>`<div class="dec"><label>${d.question}</label>
+    <input id="dec_${d.id}" placeholder="你的判断…">${d.hint?`<div style="font-size:11px;color:#999;margin-top:3px">提示：${d.hint}</div>`:''}</div>`).join('');
+  document.getElementById('rsBody').innerHTML=`<div class="cc-box">
+    <div class="cc">下诊断前，先把推理摆出来：①勾选支持你诊断的<b>决定性证据</b>；②回答关键判断；③写诊断和鉴别。<b>依据链不闭合会被打回。</b></div>
+    <div class="field"><label>① 勾选决定性证据（红色标记的为高权重）</label><div class="ev-list">${evHtml}</div></div>
+    ${decHtml}
+    <div class="field"><label>② 你的诊断</label><input id="rsDiag" placeholder="诊断…"></div>
+    <div class="field"><label>③ 鉴别诊断（需排除什么，靠哪条排除）</label><textarea id="rsDiff"></textarea></div>
+    <button class="btn" onclick="rsDiagnose()">提交诊断推理</button>
+    <div id="diagResult"></div></div>`;
+}
+async function rsDiagnose(){
+  const evidence=[...document.querySelectorAll('.ev input:checked')].map(x=>x.value);
+  const decisions={}; rs.key_decisions.forEach(d=>decisions[d.id]=document.getElementById('dec_'+d.id).value);
+  const r=await fetch('/train/api/reasoning/diagnose',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({evidence,decisions,diagnosis:val('rsDiag'),differential:val('rsDiff')})});
+  const d=await r.json();
+  if(!d.passed){
+    document.getElementById('diagResult').innerHTML=`<div class="block"><b>↩ 依据链不闭合，打回重做：</b><br>${d.blocks.map(b=>'• '+b).join('<br>')}</div>`;
+    return;
+  }
+  window._rsDiag={evidence,decisions,diagnosis:val('rsDiag'),differential:val('rsDiff')};
+  document.getElementById('diagResult').innerHTML=`<div class="ans">✅ 依据链闭合（决定性证据覆盖 ${d.chain_pct}%）。进入治疗决策。</div>`;
+  showRsTreat();
+}
+function showRsTreat(){
+  setStep(4);
+  document.getElementById('rsBody').innerHTML=`<div class="cc-box"><div class="cc">诊断成立。现在想清楚<b>治疗决策的逻辑</b>——先自己回答下面几个"为什么"，再点对照。</div>
+    <div id="treatQ"></div>
+    <button class="btn" onclick="rsShowRationale()">显示决策逻辑对照</button>
+    <div id="treatAns"></div>
+    <button class="btn green" style="margin-top:12px" onclick="rsReview()">进入复盘评分 →</button></div>`;
+  // 治疗题先让学生想（题目来自后端 rationale 的 q）
+  fetch('/train/api/reasoning/treat',{method:'POST'}).then(r=>r.json()).then(d=>{
+    document.getElementById('treatQ').innerHTML=d.rationale.map((x,i)=>`<div class="dec"><label>${i+1}. ${x.q}</label><textarea placeholder="先写下你的思考…"></textarea></div>`).join('');
+    window._rationale=d.rationale;
+  });
+}
+function rsShowRationale(){
+  document.getElementById('treatAns').innerHTML='<div class="section-title">决策逻辑（专家）</div>'+
+    window._rationale.map(x=>`<div class="ans"><b>Q：${x.q}</b>\nA：${x.a}</div>`).join('')+
+    `<div style="font-size:12px;color:#888">看完对照，如果你治疗方向判断正确，请进入复盘。</div>`;
+}
+async function rsReview(){
+  setStep(5);
+  const payload=Object.assign({treat_ok:8,differential:window._rsDiag.differential},window._rsDiag);
+  const r=await fetch('/train/api/reasoning/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const d=await r.json(); const dm=d.scores.dims;
+  const dimNames={chain:'依据链完整性',weight:'证据权重识别',differential:'鉴别诊断',ask_purpose:'问诊目的性',exam_hypothesis:'检查-假设对应',treat_logic:'治疗-诊断逻辑'};
+  let html=`<div class="score-big">${d.scores.total}<small> /100</small></div>`;
+  Object.entries(dimNames).forEach(([k,n])=>{const v=dm[k];const max=k==='chain'?25:k==='weight'||k==='differential'?20:k==='ask_purpose'?15:10;
+    html+=`<div class="bar-row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/max*100}%"></div></div><div class="val">${v}/${max}</div></div>`;});
+  html+=`<div class="section-title">诊断依据链（专家底牌）</div>`+
+    d.evidence_chain.map(e=>`<div style="font-size:12.5px;margin:3px 0">${e.picked?'<span class="ok">✓你选了</span>':'<span class="no">✗漏选</span>'} <b>[${e.id}]</b> ${e.text} <span style="color:#888">→ ${e.points_to}</span></div>`).join('');
+  const m=d.model_record;
+  html+=`<div class="section-title">复盘 · 规范病历对照</div>
+    <div class="ans"><b>诊断：</b>${m.diagnosis}\n<b>鉴别：</b>${m.differential}\n<b>治疗：</b>${m.treatment}\n\n<b>🔑 依据链：</b>${m.keypoint}</div>`;
+  document.getElementById('rsBody').innerHTML=`<div class="cc-box">${html}<button class="btn ghost" style="margin-top:10px" onclick="goHome()">完成</button></div>`;
+}
+
+// ─────────── 综合成绩 ───────────
+async function showFinal(){
+  const r=await fetch('/train/api/final',{method:'POST'}); const d=await r.json();
+  const s=d.sections; const names={history:'病史采集',analysis:'病例分析',reasoning:'临床思维'};
+  let html='';
+  if(d.final==null){ html='<div style="color:#999;font-size:13px">还没有完成的测评记录，先去做几个板块吧。</div>'; }
+  else{
+    html=`<div class="score-big">${d.final}<small> /100 综合总分</small></div>`;
+    Object.entries(names).forEach(([k,n])=>{const v=s[k];const w=Math.round(d.weights[k]*100);
+      html+=`<div class="bar-row"><div class="lab">${n}（权重${w}%）</div><div class="track"><div class="fill" style="width:${v||0}%"></div></div><div class="val">${v==null?'—':v}</div></div>`;});
+  }
+  document.getElementById('finalBox').innerHTML=html;
+}
+init();
+</script>
+<script src="/static/identity.js?v=20260915"></script>
+<script>window.onIdentified=function(me){Identity.chip(document.getElementById('idChipSlot'));};</script>
+</body>
+</html>

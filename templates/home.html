@@ -10,7 +10,7 @@ body{font-family:'Microsoft YaHei',sans-serif;background:linear-gradient(135deg,
 .container{max-width:800px;padding:40px}
 h1{color:#fff;font-size:32px;text-align:center;margin-bottom:8px}
 .sub{color:rgba(255,255,255,.7);text-align:center;font-size:15px;margin-bottom:40px}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .card{background:#fff;border-radius:16px;padding:30px 20px;text-align:center;text-decoration:none;transition:all .3s;box-shadow:0 4px 20px rgba(0,0,0,.15)}
 .card:hover{transform:translateY(-4px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
 .card .icon{font-size:48px;margin-bottom:16px}
@@ -20,6 +20,7 @@ h1{color:#fff;font-size:32px;text-align:center;margin-bottom:8px}
 .tag.class2{background:#d5f5e3;color:#27ae60}
 .tag.endo{background:#d6eaf8;color:#2B7BEC}
 .tag.xray{background:#fdebd0;color:#e67e22}
+.tag.crown{background:#f4ecf7;color:#8e44ad}
 </style>
 </head>
 <body>
@@ -46,13 +47,28 @@ h1{color:#fff;font-size:32px;text-align:center;margin-bottom:8px}
 <span class="tag xray">7维度量化</span>
 </a>
 
-<a href="/consult" class="card">
-<div class="icon">🩺</div>
-<h2>模拟诊疗</h2>
-<p>AI患者对话·问诊·检查·诊断·病历书写</p>
-<span class="tag" style="background:#e8daef;color:#8e44ad">三阶段训练</span>
+<a href="/crown_ant" class="card">
+<div class="icon">👑</div>
+<h2>前牙全瓷冠预备评分</h2>
+<p>11/21 · 切端/唇舌面磨除·肩台·聚合度2-5°（六机位+导板）</p>
+<span class="tag crown">对标Fair Grader</span>
+</a>
+
+<a href="/crown_post" class="card">
+<div class="icon">🦷</div>
+<h2>后牙全瓷冠预备评分</h2>
+<p>16/26/36/46 · 功能尖2.0·肩台齐龈·聚合度2-5°</p>
+<span class="tag crown">对标Fair Grader</span>
+</a>
+
+<a href="/train" class="card">
+<div class="icon">🧠</div>
+<h2>临床思维训练</h2>
+<p>病史采集·病例分析·临床思维三板块，逆向逼问、凭证据下诊断、综合评分</p>
+<span class="tag" style="background:#d6eaf8;color:#1B5fa8">13个病例·三板块</span>
 </a>
 </div>
 </div>
+<script src="/static/identity.js?v=20260915"></script>
 </body>
 </html>

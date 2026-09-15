@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ cfg.title }}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;padding:20px 0;text-align:center}
+.header h1{font-size:25px;font-weight:700}.header p{font-size:13px;opacity:.85;margin-top:5px}
+.container{max-width:960px;margin:24px auto;padding:0 16px}
+.card{background:#fff;border-radius:12px;padding:22px;margin-bottom:20px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.card h2{font-size:18px;color:#1B3A5C;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #2B7BEC}
+.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.form-group{margin-bottom:14px}.form-group label{display:block;font-size:13px;color:#2C3E50;margin-bottom:6px;font-weight:600}
+.form-group input,.form-group select{width:100%;padding:10px 12px;border:1.5px solid #dde;border-radius:8px;font-size:14px}
+.slot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.slot{border:2px dashed #9bb8dd;border-radius:10px;padding:10px;text-align:center;cursor:pointer;background:#f8fafd;position:relative;transition:.2s}
+.slot:hover{background:#e8f0fe;border-color:#2B7BEC}
+.slot.filled{border-style:solid;border-color:#27ae60;background:#f3fbf6}
+.slot .num{display:inline-block;width:22px;height:22px;line-height:22px;background:#2B7BEC;color:#fff;border-radius:50%;font-size:12px;margin-bottom:4px}
+.slot.filled .num{background:#27ae60}
+.slot .lab{font-size:12.5px;font-weight:600;color:#1B3A5C;line-height:1.4}
+.slot .sub{font-size:10.5px;color:#888;margin-top:3px;line-height:1.4}
+.slot img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-top:6px}
+.slot .x{position:absolute;top:4px;right:6px;color:#c0392b;font-size:16px;display:none;font-weight:700}
+.slot.filled .x{display:block}
+.slot input{display:none}
+.btn{padding:12px 32px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;width:100%}
+.btn-primary:disabled{background:#ccc;cursor:not-allowed}
+.notice{margin:12px 0;padding:12px 14px;background:#fff8e1;border:1.5px solid #f39c12;border-radius:10px;font-size:12.5px;line-height:1.9;color:#7a5b00}
+.notice b{color:#b9770e}
+.keyline{display:inline-block;background:#eaf3ff;border:1px solid #b9d4f5;border-radius:6px;padding:1px 7px;margin:2px;font-size:11.5px;color:#1B5aa8}
+.result-area{display:none;animation:fadeIn .5s}@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.score-circle{width:120px;height:120px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 12px}
+.score-circle.excellent{background:linear-gradient(135deg,#27ae60,#2ecc71)}.score-circle.good{background:linear-gradient(135deg,#2B7BEC,#3498db)}.score-circle.mid{background:linear-gradient(135deg,#f39c12,#e67e22)}
+.score-circle.pass{background:linear-gradient(135deg,#e67e22,#d35400)}.score-circle.fail{background:linear-gradient(135deg,#c0392b,#e74c3c)}
+.score-circle .big{font-size:34px;font-weight:700;color:#fff}.score-circle .small{font-size:12px;color:rgba(255,255,255,.85)}
+.equip{display:inline-block;background:#1B3A5C;color:#fff;border-radius:14px;padding:6px 18px;font-size:15px;font-weight:700;margin:6px}
+.dim-bar{display:flex;align-items:center;margin:4px 0}.dim-bar .label{flex:1.3;font-size:12.5px;color:#2C3E50;text-align:right;padding-right:8px}
+.dim-bar .bar-wrap{flex:2;height:20px;background:#eee;border-radius:10px;overflow:hidden}
+.dim-bar .bar-fill{height:100%;border-radius:10px}
+.bar-fill.good{background:linear-gradient(90deg,#27ae60,#2ecc71)}.bar-fill.warning{background:linear-gradient(90deg,#f39c12,#e67e22)}.bar-fill.bad{background:linear-gradient(90deg,#c0392b,#e74c3c)}.bar-fill.skip{background:#bdc3c7}
+.dim-bar .dim-score{width:54px;font-size:12px;color:#666;padding-left:8px}
+.process-box{margin:0 0 8px 24px}.process-box pre{white-space:pre-wrap;font-size:11px;color:#555;background:#f9fafb;padding:9px;border-radius:6px;line-height:1.5;margin:0}
+.suggestion-box{background:#fff8e1;border-left:4px solid #f39c12;padding:12px 16px;border-radius:8px;margin-top:12px}
+.suggestion-box li{font-size:13px;color:#666;margin:5px 0 5px 18px}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;justify-content:center;align-items:center}
+.loading-overlay.show{display:flex}.loading-box{background:#fff;border-radius:16px;padding:36px;text-align:center}
+.spinner{width:48px;height:48px;border:4px solid #eee;border-top:4px solid #2B7BEC;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.back-link{display:block;text-align:center;margin:6px 0 16px;color:#2B7BEC;text-decoration:none;font-size:14px}
+@media(max-width:680px){.slot-grid{grid-template-columns:repeat(2,1fr)}.row2{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div class="header"><h1>👑 {{ cfg.title }}</h1><p>六机位照片+硅胶导板 → AI对标 Fair Grader 三维项评分</p></div>
+<div class="container">
+<a href="/" class="back-link">← 返回首页</a>
+<div class="card">
+<h2>📸 分步上传 6 张标准照片</h2>
+<div class="row2">
+  <div class="form-group"><label>学生姓名</label><input type="text" id="studentName" placeholder="请输入姓名"></div>
+  <div class="form-group"><label>班级</label><input type="text" id="studentClass" value="25口腔1班"></div>
+  <div class="form-group"><label>抽取牙位</label>
+    <select id="tooth">{% for t in cfg.teeth %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+  </div>
+</div>
+
+<div class="notice">
+<b>📐 六机位规范（缺图会按覆盖度封顶总分）</b><br>
+<span class="keyline">①术前正位</span>备牙前同角度存档（与②对比算体积比）
+<span class="keyline">②术后正位</span>唇/颊面正视
+<span class="keyline" id="occlusalKey">{{ cfg.occlusal_label }}</span>
+<span class="keyline">④邻面侧位</span>牙长轴竖直，测<b>聚合度2-5°</b>
+<span class="keyline">⑤颈缘特写</span>肩台一圈+标尺
+<span class="keyline">⑥硅胶导板剖面</span>唇舌向、近远中向各切一刀，切面贴<b>毫米标尺</b>，测各面磨除量<br>
+深色/纯色衬底、光线充足、对焦清晰、牙体占画面1/3以上；标尺（YDM探针/标定贴）必须与牙同框。
+</div>
+
+<div class="slot-grid" id="slotGrid"></div>
+<div style="margin-top:16px"><button class="btn btn-primary" id="analyzeBtn" disabled>🔍 开始AI分析（至少上传导板剖面等关键机位）</button></div>
+</div>
+
+<div class="card result-area" id="resultCard"><h2>📊 AI评分报告</h2>
+<div style="text-align:center" id="resultContent"></div>
+<div style="text-align:center;margin-top:16px">
+<button class="btn" style="background:#e67e22;color:#fff;padding:10px 22px;font-size:14px" onclick="var s=this.getAttribute('data-sid');if(s)window.open('/report/'+s,'_blank')">📥 完整报告/导出</button>
+<button class="btn" style="background:#27ae60;color:#fff;padding:10px 22px;font-size:14px;margin-left:8px" onclick="location.reload()">🔄 分析下一份</button>
+</div></div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-box"><div class="spinner"></div><p style="font-size:16px;color:#1B3A5C;font-weight:600">AI正在分析中…</p><p style="font-size:13px;color:#999">磨除量 · 肩台 · 聚合度 · 形态</p></div></div>
+
+<script>
+const SLOTS=[
+ {k:'pre',n:'①术前正位',s:'备牙前存档'},
+ {k:'post',n:'②术后正位',s:'唇/颊面正视'},
+ {k:'occlusal',n:{{ cfg.occlusal_label | tojson }},s:'俯视'},
+ {k:'lateral',n:'④邻面侧位',s:'长轴竖直·测聚合度'},
+ {k:'margin',n:'⑤颈缘特写',s:'肩台+标尺'},
+ {k:'guide',n:'⑥硅胶导板剖面',s:'双切面+毫米标尺'}
+];
+const ENDPOINT={{ cfg.endpoint | tojson }};
+const files={};
+const grid=document.getElementById('slotGrid'),analyzeBtn=document.getElementById('analyzeBtn');
+SLOTS.forEach(sl=>{
+ const el=document.createElement('div');el.className='slot';el.id='slot-'+sl.k;
+ el.innerHTML='<span class="x">&times;</span><span class="num">'+sl.n.slice(0,1)+'</span><div class="lab">'+sl.n.slice(1)+'</div><div class="sub">'+sl.s+'</div><input type="file" accept="image/*" capture="environment"><img style="display:none">';
+ const inp=el.querySelector('input'),img=el.querySelector('img');
+ el.querySelector('.num').textContent=sl.n.charAt(0);
+ el.querySelector('.lab').textContent=sl.n.slice(1);
+ el.addEventListener('click',e=>{if(e.target.classList.contains('x'))return;inp.click();});
+ inp.addEventListener('change',()=>{const f=inp.files[0];if(!f)return;files[sl.k]=f;
+   const rd=new FileReader();rd.onload=ev=>{img.src=ev.target.result;img.style.display='block';el.classList.add('filled');refreshBtn();};rd.readAsDataURL(f);});
+ el.querySelector('.x').addEventListener('click',e=>{e.stopPropagation();delete files[sl.k];inp.value='';img.style.display='none';el.classList.remove('filled');refreshBtn();});
+ grid.appendChild(el);
+});
+function refreshBtn(){analyzeBtn.disabled=Object.keys(files).length===0;}
+analyzeBtn.addEventListener('click',async()=>{
+ const ov=document.getElementById('loadingOverlay');ov.classList.add('show');
+ const fd=new FormData();
+ Object.entries(files).forEach(([k,f])=>fd.append(k,f));
+ fd.append('student_name',document.getElementById('studentName').value||'匿名');
+ fd.append('student_class',document.getElementById('studentClass').value||'未知班级');
+ fd.append('tooth',document.getElementById('tooth').value);
+ try{
+  const resp=await fetch(ENDPOINT,{method:'POST',body:fd});
+  const txt=await resp.text();let data;
+  try{data=JSON.parse(txt)}catch(_){alert('服务器返回异常（HTTP '+resp.status+'），请重试。');return;}
+  if(data.error){alert(data.error);return;}
+  renderResult(data);
+ }catch(err){alert('分析失败：网络或服务器异常，请重试。（'+err.message+'）');}
+ finally{ov.classList.remove('show');document.getElementById('resultCard').style.display='block';document.getElementById('resultCard').scrollIntoView({behavior:'smooth'});}
+});
+function renderResult(data){
+ const gc={'优秀':'excellent','良好':'good','中等':'mid','及格':'pass','不及格':'fail'}[data.grade]||'pass';
+ let dims=data.dimensions.map((d,i)=>{
+  let bc=d.status==='good'?'good':(d.status==='warning'?'warning':(d.status==='skip'?'skip':'bad'));
+  let icon=d.status==='good'?'✅':(d.status==='warning'?'⚠️':(d.status==='skip'?'⬜':'❌'));
+  let proc=d.process_analysis?('<div class="process-box"><div style="cursor:pointer;font-size:12px;color:#2B7BEC;margin-bottom:4px" onclick="var e=document.getElementById(\'pb'+i+'\');e.style.display=e.style.display===\'none\'?\'block\':\'none\'">📋 打分过程（点击展开/收起）</div><div id="pb'+i+'" style="display:none"><pre>'+d.process_analysis+'</pre>'+(d.targeted_suggestion?'<div style="background:#fff8e1;padding:9px;border-radius:6px;margin-top:6px;font-size:12px;border-left:3px solid #f39c12">💡 '+d.targeted_suggestion+'</div>':'')+'</div></div>'):'';
+  return '<div class="dim-bar"><div class="label">'+icon+' '+d.name+'</div><div class="bar-wrap"><div class="bar-fill '+bc+'" style="width:'+d.percentage+'%"></div></div><div class="dim-score">'+d.score+'/'+d.max_score+'</div></div>'+proc;
+ }).join('');
+ let sug=(data.suggestions&&data.suggestions.length)?'<div class="suggestion-box"><h4 style="color:#e67e22;font-size:14px;margin-bottom:6px">🔧 优先改进</h4><ol>'+data.suggestions.map(s=>'<li>'+s+'</li>').join('')+'</ol></div>':'';
+ document.querySelector('#resultCard button').setAttribute('data-sid',data.session_id);
+ document.getElementById('resultContent').innerHTML=
+  '<div class="score-circle '+gc+'"><span class="big">'+data.total_score+'</span><span class="small">/100 · '+data.grade+'</span></div>'+
+  '<div><span class="equip">对标 Fair Grader 设备分：'+data.equipment_score+' / 35</span></div>'+
+  '<div style="font-size:12px;color:#888;margin-bottom:10px">牙位 '+data.tooth+' · AI总分×0.35（裁判过程分30分未计入）</div>'+
+  '<div style="background:#f0f7ff;padding:11px;border-radius:8px;margin-bottom:12px;text-align:left;font-size:13px;line-height:1.6"><strong>📝 </strong>'+data.overall_assessment+'</div>'+
+  '<div style="text-align:left">'+dims+'</div>'+sug+
+  '<div style="font-size:11px;color:#b06a00;background:#fff8e1;border-radius:6px;padding:8px 10px;margin-top:12px;line-height:1.6">⚠️ '+(data.disclaimer||'')+'</div>'+
+  '<p style="margin-top:10px;font-size:12px;color:#999">'+data.timestamp+'</p>';
+}
+</script>
+<script src="/static/identity.js?v=20260915"></script>
+</body></html>
