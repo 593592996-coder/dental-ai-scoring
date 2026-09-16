@@ -17,6 +17,7 @@ from students import (load_roster, roster_exists, load_students, list_classes,
                       fill_workbook, blank_workbook, class_template_map,
                       roster_source_files, SCORE_COLS)
 import attempts
+from case_photos import photos_for
 
 # 教师试用账号：只需在学号框输 abc123 即登录（无需姓名/密码）；成绩标记 teacher，不进学生总览/导出
 TEACHER_ACCOUNT = {'sid': 'abc123',
@@ -385,7 +386,7 @@ def reasoning_exam():
     purpose = rc.get('reasoning', {}).get('exam_purpose', {}).get(name, '')
     return jsonify({'item': name, 'finding': items[name].get('finding', ''),
                     'key_points': items[name].get('key_points', ''), 'purpose': purpose,
-                    'done': done})
+                    'photos': photos_for(case_id, name), 'done': done})
 
 
 @train_bp.route('/train/api/reasoning/diagnose', methods=['POST'])

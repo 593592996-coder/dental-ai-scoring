@@ -247,7 +247,14 @@ async function doExam(name){
   const r=await fetch('/train/api/reasoning/exam',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item:name})});
   const d=await r.json();
   const btn=document.getElementById('ex_'+name); if(btn){btn.classList.add('done');btn.disabled=true;}
-  let html=`<div class="finding"><b>🔍 ${name} 结果：</b>\n${d.finding}</div>`;
+  let html=`<div class="finding"><b>🔍 ${name} 结果：</b>\n${d.finding}`;
+  if(d.photos&&d.photos.length){
+    html+=d.photos.map(p=>`<div style="margin-top:8px;text-align:center">
+      <img src="${p.url}" alt="${p.label}" style="max-width:100%;max-height:360px;border-radius:8px;border:1px solid #ccc"
+        onclick="window.open('${p.url}')" onerror="this.parentElement.style.display='none'">
+      ${p.caption?`<div style="font-size:12px;color:#888;margin-top:4px">${p.caption}</div>`:''}</div>`).join('');
+  }
+  html+=`</div>`;
   if(d.purpose) html+=`<div class="purpose">💡 这项检查的意义：${d.purpose}</div>`;
   const box=document.getElementById('examFindings'); box.innerHTML=html+box.innerHTML;
 }

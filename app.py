@@ -1228,6 +1228,12 @@ def static_files(filename):
     return send_from_directory('static', filename)
 
 
+@app.route('/images/<path:filename>')
+def case_images(filename):
+    """临床思维训练病例题干照片（口内照/X线片）"""
+    return send_from_directory(os.path.join('static', 'images'), filename)
+
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """服务学生上传的原始照片"""
