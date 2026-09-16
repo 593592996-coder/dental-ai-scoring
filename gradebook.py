@@ -7,9 +7,12 @@
 - 明显测试数据（匿名/test/测试等）归为 junk，不计入。
 """
 import os
+import re
 import json
 import glob
 from students import load_students, class_template_map, fill_workbook, SCORE_COLS
+
+_CN_NUM = {'一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6'}
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 REPORT_DIR = os.path.join(BASE, 'reports')
@@ -36,21 +39,54 @@ def _norm(s):
 
 
 def _is_junk(name):
-    n = _norm(name).lower()
-    return (not n) or (n in _JUNK_NAMES) or any(j in n for j in ('测试', 'test', '冒烟', 'abc'))
+    n = _norm(name)
+    low = n.lower()
+    has_cjk = bool(re.search(r'[一-鿿]', n))
+    # 无中文（数字/拼音缩写/英文）或只有一个汉字，视为无效测试名
+    if not has_cjk or len(re.findall(r'[一-鿿]', n)) < 2:
+        return True
+    return (low in _JUNK_NAMES) or any(j in n for j in ('测试', '冒烟')) or any(j in low for j in ('test', 'abc'))
+
+
+def _class_num(text):
+    """从班级字符串提取班号数字：'25口腔3班'/'2025级口腔医学3班'/'三班' -> '3'。"""
+    t = _norm(text)
+    m = re.search(r'(\d)\s*班?$', t)
+    if m:
+        return m.group(1)
+    for cn, n in _CN_NUM.items():
+        if cn + '班' in t or t.endswith(cn):
+            return n
+    return ''
+
+
+def _canonical_classes():
+    """{班号数字: 花名册标准班名}，如 {'1':'2025级口腔医学1班'}。"""
+    out = {}
+    for st in load_students():
+        n = _class_num(st['class'])
+        if n and n not in out:
+            out[n] = st['class']
+    return out
 
 
 def _roster_nameclass_index():
-    """(姓名,班级) → 学号；同名同班重复则置 None（不自动匹配）。"""
+    """(姓名,标准班名) → 学号；同名同班重复则置 None（不自动匹配）。
+    另含 name_only：姓名 → 学号（全名册唯一时才用于兜底）。"""
     idx, dup = {}, set()
+    name_count, name_sid = {}, {}
     for st in load_students():
-        key = (_norm(st['name']), _norm(st['class']))
+        key = (_norm(st['name']), st['class'])
         if key in idx:
             dup.add(key)
         idx[key] = st['sid']
+        nm = _norm(st['name'])
+        name_count[nm] = name_count.get(nm, 0) + 1
+        name_sid[nm] = st['sid']
     for key in dup:
         idx[key] = None
-    return idx
+    name_only = {nm: sid for nm, sid in name_sid.items() if name_count[nm] == 1}
+    return idx, name_only
 
 
 def _module_of(fname):
@@ -94,7 +130,8 @@ def collect():
     rows_by_sid[sid] = {sid,name,class, modules:{key:{best,latest,report_id}}, thinking:{...}}
     """
     roster = {st['sid']: st for st in load_students()}
-    name_idx = _roster_nameclass_index()
+    name_idx, name_only = _roster_nameclass_index()
+    canon_class = _canonical_classes()
     rows = {}
     unmatched = []
     junk = 0
@@ -127,12 +164,19 @@ def collect():
             if _is_junk(name):
                 junk += 1
                 continue
-            sid = name_idx.get((name, klass)) if klass and klass != '未知班级' else None
+            # 老数据班级写法归一：'25口腔3班'→花名册标准班名
+            canon = canon_class.get(_class_num(klass), klass)
+            sid = name_idx.get((name, canon))
+            how = '姓名+班级自动匹配'
+            if not sid:                       # 同班不重名时，按唯一姓名兜底
+                sid = name_only.get(name)
+                how = '姓名唯一自动匹配'
             if not sid:
-                unmatched.append({'name': name, 'class': klass, 'module': mod,
-                                  'module_name': MODULE_NAME[mod], 'score': score,
-                                  'report_id': rep_id, 'ts': ts})
+                unmatched.append({'name': name, 'class': klass, 'canon_class': canon,
+                                  'module': mod, 'module_name': MODULE_NAME[mod],
+                                  'score': score, 'report_id': rep_id, 'ts': ts})
                 continue
+            klass = canon
         row = ensure(sid, name or roster.get(sid, {}).get('name', ''),
                      klass or roster.get(sid, {}).get('class', ''))
         m = row['modules'].setdefault(mod, {'best': None, 'latest': None, 'report_id': None, 'ts': ''})
