@@ -9,6 +9,8 @@
 from flask import Blueprint, render_template, request, jsonify, session, send_file
 import uuid, os, json, re, io
 from datetime import datetime
+from chat_matcher import match_answer, log_unmatched, normalize_text
+import llm_patient
 from cases import CASES
 from reasoning_cases import REASONING as R1, WEIGHTS, in_scope_cases
 from reasoning_cases2 import REASONING2 as R2
@@ -31,6 +33,8 @@ train_bp = Blueprint('training', __name__)
 
 SCORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scores')
 os.makedirs(SCORE_DIR, exist_ok=True)
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'consult_logs')
+os.makedirs(LOG_DIR, exist_ok=True)
 
 
 # ═══════════════════ 通用 ═══════════════════
@@ -149,7 +153,10 @@ def train_cases():
     return jsonify({cid: {'title': rc.get('title'),
                           'chief_complaint': _cc(cid),
                           'level': rc.get('level'),
-                          'tag': rc.get('module_tag'), 'in_scope': rc.get('in_scope', True)}
+                          'tag': rc.get('module_tag'), 'in_scope': rc.get('in_scope', True),
+                          'has_history': 'history_outline' in rc,
+                          'has_analysis': 'analysis' in rc,
+                          'has_reasoning': 'reasoning' in rc}
                     for cid, rc in REASONING.items()})
 
 
@@ -171,27 +178,129 @@ def history_start(case_id):
     })
 
 
+_FALLBACK_REPLY = '我……不太明白你问的是哪样，你换个问法嘛？'
+
+
+def _patient_reply(case_id, q, log):
+    """三级回答：规则匹配 → 大模型按底牌扮演 → 中性兜底。
+    返回 (reply, source)，source ∈ {'rule','section','ai','fallback'}。"""
+    b = _base(case_id)
+    recent = [x['patient'] for x in log]
+    m = match_answer(q, b.get('conversation', {}), recent_answers=recent)
+    if m:
+        return m['answer'], ('section' if m.get('fallback') else 'rule')
+    history = [{'student': x['student'], 'patient': x['patient']} for x in log]
+    ai = llm_patient.answer(case_id, b, q, recent=history)
+    if ai:
+        return ai, 'ai'
+    return _FALLBACK_REPLY, 'fallback'
+
+
 @train_bp.route('/train/api/history/chat', methods=['POST'])
 def history_chat():
     case_id = session.get('train_case')
     if not case_id: return jsonify({'error': '请先开始'}), 400
-    b = _base(case_id)
     data = request.get_json()
     q = (data.get('message') or '').strip()
-    conv = b.get('conversation', {})
-    best, best_score = None, 0
-    for keywords, answer in conv.items():
-        score = 0
-        for k in keywords.split('|'):
-            if k and k in q:
-                score += 1 + len(k) * 0.1
-        if score > best_score:
-            best_score, best = score, answer
-    reply = best if best else '我……不太明白你问的是哪样，你换个问法嘛？'
     log = session.get('hist_log', [])
+    reply, source = _patient_reply(case_id, q, log)
+    if source == 'fallback' and q:
+        rc = _rc(case_id) or {}
+        log_unmatched(LOG_DIR, q, case_id, rc.get('title', ''))
     log.append({'student': q, 'patient': reply})
     session['hist_log'] = log
     return jsonify({'reply': reply})
+
+
+# 剥去这些前/后缀修饰词得到疾病「家族名」：学生只写家族名算方向对、分型不准。
+# 注意不放单字「牙」——牙髓炎、牙隐裂的「牙」是病名本身。
+_DIAG_PREFIX = ('急性化脓性', '慢性溃疡性', '慢性增生性', '不可复性', '可复性', '症状性',
+                '急性', '慢性', '复杂', '简单', '原发性', '继发', '牙颈部')
+_DIAG_SUFFIX = ('露髓',)
+
+# 这些疾病必须写出分型才算「诊断正确」；只写家族名（牙髓炎/根尖周炎/冠折）算方向对
+_REQUIRE_SUBTYPE = {'牙髓炎', '根尖周炎', '冠折'}
+
+
+def _diag_core(name):
+    s = name
+    changed = True
+    while changed:
+        changed = False
+        for p in _DIAG_PREFIX:
+            if s.startswith(p) and len(s) > len(p):
+                s = s[len(p):]; changed = True
+    for suf in _DIAG_SUFFIX:
+        if s.endswith(suf) and len(s) > len(suf):
+            s = s[:-len(suf)]; changed = True
+    return s
+
+
+def _split_diag_list(text):
+    """把学生写的「可能疾病排序」拆成有序列表：支持 顿号/逗号/分号/斜杠/换行 和 1.①② 等编号。"""
+    out = []
+    for p in re.split(r'[、,，；;/\n\r]+', text or ''):
+        p = re.sub(r'^\s*(?:\d+\s*[.、）)]?|[①②③④⑤⑥⑦⑧⑨⑩]|[（(]?[一二三四五六七八九十]+[)）、.])\s*', '', p.strip())
+        p = p.strip(' 　.。；;：:')
+        if p:
+            out.append(p)
+    return out
+
+
+def _diag_match(name, acceptable, cn):
+    """单个诊断与标准的关系：exact=具体诊断对 / core=只写对需分型疾病的家族名 / none=不对。"""
+    n = re.sub(r'\d+', '', name).replace(' ', '')
+    if cn and cn in n:
+        return 'exact'
+    for x in acceptable:
+        if x in n:
+            base = _diag_core(x)
+            return 'core' if (base in _REQUIRE_SUBTYPE and x == base) else 'exact'
+    # 写了需分型疾病的家族名、且本病例确实期待更具体的型
+    for fam in _REQUIRE_SUBTYPE:
+        if fam in n and any(fam in x and x != fam for x in acceptable):
+            return 'core'
+    return 'none'
+
+
+def _judge_impression(rc, impression, diff_text=''):
+    """板块1第二部分：学生列出≥2种「可能的疾病」并把最可能的排第一（不计入病史分）。"""
+    a = rc.get('analysis', {})
+    correct = a.get('diagnosis', '')
+    acceptable = [x for x in a.get('acceptable_diag', []) if x]
+    t = (impression or '').strip()
+    cn = re.sub(r'[（(].*?[)）]', '', correct).replace(' ', '') if correct else ''
+    cn = re.sub(r'\d+', '', cn)
+
+    your_list = _split_diag_list(t)
+    enough = len(your_list) >= 2
+    first_match = _diag_match(your_list[0], acceptable, cn) if your_list else 'none'
+    any_pos = next((i for i, d in enumerate(your_list)
+                    if _diag_match(d, acceptable, cn) in ('exact', 'core')), -1)
+
+    if first_match == 'exact':
+        level = 'correct' if enough else 'partial'
+    elif first_match == 'core' or any_pos >= 1:
+        level = 'partial'
+    else:
+        level = 'wrong'
+
+    dfs = a.get('differential_exam', []) + a.get('differential_clinical', [])
+    joined = ' '.join(your_list)
+    diff_rows = [{'name': d['name'],
+                  'hit': (d['name'] in joined) or any(k and k in joined for k in d.get('keywords', []))}
+                 for d in dfs]
+    # 参考诊断去掉括号补充和牙位数字（列疾病不要求写牙位），如「36慢性牙髓炎急性发作（急性牙髓炎）」→「慢性牙髓炎急性发作」
+    ref = re.sub(r'[（(].*?[)）]', '', correct)
+    ref = re.sub(r'(?<!\d)\d{1,2}(?!\d)', '', ref)
+    ref = re.sub(r'[；;，,、\s]+$', '', ref).strip() or re.sub(r'\d+', '', correct).strip()
+    return {'level': level, 'your_list': your_list, 'enough': enough,
+            'first_match': first_match, 'primary': your_list[0] if your_list else '',
+            'ordered_right': any_pos == 0, 'target_at': any_pos,
+            'correct': correct,
+            'expected_order': [ref] + [d['name'] for d in dfs],
+            'diff_rows': diff_rows,
+            'diff_hit': sum(1 for r in diff_rows if r['hit']), 'diff_total': len(diff_rows)}
 
 
 @train_bp.route('/train/api/history/score', methods=['POST'])
@@ -200,8 +309,11 @@ def history_score():
     rc = _rc(case_id)
     if not case_id or not rc or 'history_outline' not in rc:
         return jsonify({'error': '会话失效'}), 400
+    payload = request.get_json(silent=True) or {}
+    impression = (payload.get('impression') or '').strip()
+    impression_fb = _judge_impression(rc, impression) if impression else None
     log = session.get('hist_log', [])
-    all_q = ' '.join(x['student'] for x in log)
+    all_q = ' '.join(x['student'] + ' ' + normalize_text(x['student']) for x in log)
 
     outline = rc['history_outline']
     detail, total, covered = [], 0, 0
@@ -225,12 +337,13 @@ def history_score():
     score = max(0, base - penalty)
     result = {'score': score, 'covered': covered, 'total': total,
               'critical_missed': crit_missed, 'cat_stats': cat_stats, 'detail': detail,
-              'question_count': len(log)}
+              'question_count': len(log), 'impression': impression_fb}
     _save_score(case_id, 'history', score)
     attempts.record(_student_id(), session.get('student_name', ''), session.get('student_class', ''),
                     'history_score', case_id, score=score, covered=covered, total=total,
                     question_count=len(log), critical_missed=crit_missed,
                     cat_stats=cat_stats, detail=detail,
+                    impression=impression_fb,
                     transcript=[{'q': x['student'], 'a': x['patient']} for x in log],
                     teacher=session.get('is_teacher', False))
     return jsonify(result)
@@ -354,18 +467,13 @@ def reasoning_start(case_id):
 def reasoning_chat():
     case_id = session.get('train_case')
     if not case_id: return jsonify({'error': '请先开始'}), 400
-    b = _base(case_id)
     q = (request.get_json().get('message') or '').strip()
-    conv = b.get('conversation', {})
-    best, best_score, best_kw = None, 0, ''
-    for keywords, answer in conv.items():
-        score = 0
-        for k in keywords.split('|'):
-            if k and k in q: score += 1 + len(k) * 0.1
-        if score > best_score: best_score, best, best_kw = score, answer, keywords
-    reply = best if best else '我……不太明白，你换个问法嘛？'
     log = session.get('rs_log', [])
-    log.append({'student': q, 'patient': reply, 'matched': bool(best)})
+    reply, source = _patient_reply(case_id, q, log)
+    if source == 'fallback' and q:
+        rc = _rc(case_id) or {}
+        log_unmatched(LOG_DIR, q, case_id, rc.get('title', ''))
+    log.append({'student': q, 'patient': reply, 'matched': source in ('rule', 'section')})
     session['rs_log'] = log
     return jsonify({'reply': reply})
 
@@ -487,7 +595,7 @@ def reasoning_review():
     diff_score = round((dec_ok / max(dec_total, 1)) * 12 + (diff_hit / max(len(diff_names), 1)) * 8)
     # 4 问诊目的性 15（问到关键信息：问诊轮次覆盖 conversation 比例）
     conv = b.get('conversation', {})
-    all_q = ' '.join(x['student'] for x in log)
+    all_q = ' '.join(x['student'] + ' ' + normalize_text(x['student']) for x in log)
     ask_hit = sum(1 for kw in conv if any(k and k in all_q for k in kw.split('|')))
     ask_score = round(ask_hit / max(len(conv), 1) * 15) if conv else 10
     # 5 检查-假设 10（做了关键检查：冷测/热测/电活力/X线 中该病例有的）
