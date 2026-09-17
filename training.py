@@ -303,6 +303,19 @@ def _judge_impression(rc, impression, diff_text=''):
             'diff_hit': sum(1 for r in diff_rows if r['hit']), 'diff_total': len(diff_rows)}
 
 
+def _answer_for_item(conv, item):
+    """为一个病史提纲要点找最贴切的「患者标准回答」：
+    统计该要点关键词命中了哪条问答，命中最多的那条的回答即标准回答。"""
+    kws = [k for k in item.get('keywords', []) if k]
+    best_ans, best_n = '', 0
+    for kw_str, ans in conv.items():
+        entry_words = set(w for w in kw_str.replace('/', '|').split('|') if w)
+        n = sum(1 for k in kws if any(k in ew or ew in k for ew in entry_words))
+        if n > best_n:
+            best_n, best_ans = n, ans
+    return best_ans
+
+
 @train_bp.route('/train/api/history/score', methods=['POST'])
 def history_score():
     case_id = session.get('train_case')
@@ -315,6 +328,7 @@ def history_score():
     log = session.get('hist_log', [])
     all_q = ' '.join(x['student'] + ' ' + normalize_text(x['student']) for x in log)
 
+    conv = _base(case_id).get('conversation', {})
     outline = rc['history_outline']
     detail, total, covered = [], 0, 0
     crit_missed = []
@@ -327,7 +341,8 @@ def history_score():
             hit = any(k and k in all_q for k in it['keywords'])
             if hit: covered += 1; cat_hit += 1
             elif it.get('critical'): crit_missed.append(it['label'])
-            rows.append({'label': it['label'], 'covered': hit, 'critical': it.get('critical', False)})
+            rows.append({'label': it['label'], 'covered': hit, 'critical': it.get('critical', False),
+                         'answer': _answer_for_item(conv, it)})
         cat_stats.append({'cat': cat, 'hit': cat_hit, 'total': cat_total,
                           'pct': round(cat_hit / cat_total * 100) if cat_total else 0})
         detail.append({'cat': cat, 'items': rows})
