@@ -27,6 +27,7 @@ from scoring_crown_anterior import 前牙全瓷冠评分引擎
 from scoring_crown_posterior import 后牙全瓷冠评分引擎
 from scoring_crown_common import SLOTS as CROWN_SLOTS
 from cases_consult import CASES as CONSULT_CASES
+from chat_matcher import match_answer, log_unmatched, normalize_text
 
 # 问诊系统路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -260,48 +261,24 @@ def consult_chat():
     student_input = data.get('message', '').strip()
     if not student_input:
         return jsonify({'reply': '请描述你想了解的情况。', 'coverage': len(session.get('consult_history_log', []))})
-    # 关键词匹配（最佳匹配策略 — 双向子串匹配）
+    # 患者回答：统一匹配引擎（长词优先、单字兜底、防复读、兼容 / 分隔符）
     conv = c['conversation']
-    best_answer = None
-    best_keywords = ''
-    best_score = 0
-    for keywords, answer in conv.items():
-        ks = keywords.split('|')
-        score = 0
-        for k in ks:
-            if k in student_input or student_input in k:
-                score += 1 + len(k) * 0.1
-        if score > best_score:
-            best_score = score
-            best_answer = answer
-            best_keywords = keywords
-    if best_answer:
-        reply = best_answer
+    hist_log = session.get('consult_history_log', [])
+    m = match_answer(student_input, conv, recent_answers=[x['patient'] for x in hist_log])
+    if m:
+        reply = m['answer']
+        best_keywords = m['keywords']
     else:
-        # 记录未匹配问题
-        unmatched_file = os.path.join(CONSULT_LOG_DIR, 'unmatched_questions.json')
-        try:
-            unmatched = []
-            if os.path.exists(unmatched_file):
-                with open(unmatched_file, 'r', encoding='utf-8') as f:
-                    unmatched = json.load(f)
-            unmatched.append({
-                'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'question': student_input,
-                'case_id': case_id,
-                'case_title': c['title']
-            })
-            with open(unmatched_file, 'w', encoding='utf-8') as f:
-                json.dump(unmatched[-100:], f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        best_keywords = ''
+        log_unmatched(CONSULT_LOG_DIR, student_input, case_id, c['title'])
         reply = '我记不清了，你换个方式问问？'
-    log = session.get('consult_history_log', [])
+    log = hist_log
     log.append({'student': student_input, 'patient': reply})
     session['consult_history_log'] = log
-    # 计算问诊覆盖度
+    # 计算问诊覆盖度（学生问句先归一化，支持「治疗史/既往牙病」等栏目名问法）
+    all_asked = ' '.join(s['student'] + ' ' + normalize_text(s['student']) for s in log)
     covered = sum(1 for kw in conv if any(
-        k in ''.join(s['student'] for s in log) for k in kw.split('|')))
+        k in all_asked for k in kw.replace('/', '|').split('|') if k))
     total_kw = len(conv)
     coverage = min(100, int(covered / total_kw * 100)) if total_kw > 0 else 0
     # 记录详细日志
@@ -309,8 +286,8 @@ def consult_chat():
         'timestamp': datetime.now().strftime('%H:%M:%S'),
         'student': student_input,
         'patient': reply,
-        'matched_keywords': [k for k in best_keywords.split('|') if k in student_input] if best_answer else [],
-        'all_keywords': best_keywords if best_answer else '',
+        'matched_keywords': [k for k in best_keywords.replace('/', '|').split('|') if k and k in student_input] if m else [],
+        'all_keywords': best_keywords if m else '',
         'coverage': coverage,
         'case_id': case_id,
     }
@@ -331,7 +308,7 @@ def consult_chat():
     return jsonify({
         'reply': reply,
         'coverage': coverage,
-        'matched': best_keywords.split('|') if best_answer else []
+        'matched': best_keywords.replace('/', '|').split('|') if m else []
     })
 
 
