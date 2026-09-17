@@ -74,20 +74,26 @@ textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;borde
 <div class="header"><h1>🧠 临床思维训练</h1><span style="display:inline-flex;align-items:center;gap:12px"><span id="idChipSlot"></span><a href="/admin">教师后台</a><a href="/">← 返回板块</a></span></div>
 <div class="wrap">
 
-  <!-- 首页：板块+病例 -->
+  <!-- 首页：先选板块 -->
   <div id="home">
-    <div class="modules">
-      <div class="mod" onclick="pickModule('history')"><div class="n">①</div><h3>病史采集</h3><p>给主诉，向病人提问，练问诊完整性、条理性。</p><div class="wt">权重 30%</div></div>
-      <div class="mod" onclick="pickModule('analysis')"><div class="n">②</div><h3>病例分析</h3><p>给完整病例，书面作答诊断/依据/鉴别/治疗。</p><div class="wt">权重 30%</div></div>
-      <div class="mod" onclick="pickModule('reasoning')"><div class="n">③</div><h3>临床思维训练</h3><p>动态问诊检查，逆向逼问，练诊断推理与决策。</p><div class="wt">权重 40%</div></div>
+    <div id="modulePick">
+      <div class="modules">
+        <div class="mod" onclick="pickModule('history')"><div class="n">①</div><h3>病史采集</h3><p>给主诉，向病人提问，练问诊完整性、条理性。</p><div class="wt">权重 30%</div></div>
+        <div class="mod" onclick="pickModule('analysis')"><div class="n">②</div><h3>病例分析</h3><p>给完整病例，书面作答诊断/依据/鉴别/治疗。</p><div class="wt">权重 30%</div></div>
+        <div class="mod" onclick="pickModule('reasoning')"><div class="n">③</div><h3>临床思维训练</h3><p>动态问诊检查，逆向逼问，练诊断推理与决策。</p><div class="wt">权重 40%</div></div>
+      </div>
+      <div class="section-title">综合成绩</div>
+      <div style="background:#fff;border-radius:10px;padding:14px;text-align:center">
+        <button class="btn green" onclick="showFinal()">查看我的综合总分</button>
+        <div id="finalBox" style="margin-top:12px"></div>
+      </div>
     </div>
-    <div class="section-title">选择病例</div>
-    <div style="font-size:12px;color:#999;margin:-4px 0 8px">仅显示主诉症状，不提示诊断；灰显为超纲/执业范畴</div>
-    <div class="case-grid" id="caseGrid"></div>
-    <div class="section-title">综合成绩</div>
-    <div style="background:#fff;border-radius:10px;padding:14px;text-align:center">
-      <button class="btn green" onclick="showFinal()">查看我的综合总分</button>
-      <div id="finalBox" style="margin-top:12px"></div>
+    <!-- 第二级：选了板块后才显示该板块的病例 -->
+    <div id="casePick" class="hidden">
+      <span class="back" onclick="backToModules()">← 返回板块选择</span>
+      <div class="section-title" id="casePickTitle">选择病例</div>
+      <div style="font-size:12px;color:#999;margin:-4px 0 8px">仅显示主诉症状，不提示诊断；灰显为超纲/执业范畴</div>
+      <div class="case-grid" id="caseGrid"></div>
     </div>
   </div>
 
@@ -103,24 +109,36 @@ textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;borde
 <script>
 let CASES = {};
 let curModule = null, curCase = null;
+const MOD_NAME={history:'① 病史采集',analysis:'② 病例分析',reasoning:'③ 临床思维训练'};
 
 async function init(){
   const r = await fetch('/train/api/cases'); CASES = await r.json();
-  const grid = document.getElementById('caseGrid');
-  grid.innerHTML = Object.entries(CASES).map(([id,c])=>`
+}
+function renderCaseGrid(){
+  const flag = 'has_' + curModule;
+  const list = Object.entries(CASES).filter(([id,c])=>c[flag]);
+  document.getElementById('caseGrid').innerHTML = list.map(([id,c])=>`
     <div class="case-card ${c.in_scope?'':'off'}" onclick="openCase('${id}')">
       <div class="t">🦷 ${c.chief_complaint||c.title}</div>
       <div class="lv" style="margin-top:6px">${'★'.repeat(c.level)} 难度 ${c.in_scope?'':'（超纲·执业）'}</div>
     </div>`).join('');
 }
-function pickModule(m){ curModule=m; alertOpenHint(); }
-function alertOpenHint(){ /* 选病例时进入对应板块 */ }
+function pickModule(m){
+  curModule = m;
+  document.getElementById('casePickTitle').textContent = MOD_NAME[m] + ' · 选择病例';
+  renderCaseGrid();
+  document.getElementById('modulePick').classList.add('hidden');
+  document.getElementById('casePick').classList.remove('hidden');
+}
+function backToModules(){
+  curModule = null;
+  document.getElementById('casePick').classList.add('hidden');
+  document.getElementById('modulePick').classList.remove('hidden');
+}
 
 function openCase(id){
   curCase = id;
-  // 若已选板块则直接进，否则默认进该病例支持的板块
-  const m = curModule || 'reasoning';
-  curModule = null;
+  const m = curModule || 'history';
   document.getElementById('home').classList.add('hidden');
   document.getElementById('work').classList.remove('hidden');
   document.getElementById('workTitle').textContent = '🦷 ' + (CASES[id].chief_complaint || CASES[id].title);
@@ -128,17 +146,25 @@ function openCase(id){
   else if(m==='analysis') renderAnalysis();
   else renderReasoning();
 }
-function goHome(){ document.getElementById('work').classList.add('hidden'); document.getElementById('home').classList.remove('hidden'); }
+function goHome(){ // 从病例返回 → 回到当前板块的病例列表
+  document.getElementById('work').classList.add('hidden');
+  document.getElementById('home').classList.remove('hidden');
+}
 
 // ─────────── 板块1 病史采集 ───────────
 async function renderHistory(){
   const body = document.getElementById('workBody');
-  body.innerHTML = `<div class="phase-steps"><span class="pstep on">① 问诊采集</span><span class="pstep">② 评分</span></div>
+  body.innerHTML = `<div class="phase-steps"><span class="pstep on">① 问诊采集</span><span class="pstep">② 医生初步考虑</span><span class="pstep">③ 评分反馈</span></div>
     <div class="cc-box"><div class="cc" id="hCc">加载中…</div>
       <div class="chat" id="hChat"></div>
       <div class="cinp"><input id="hInput" placeholder="向患者提问，如：哪里疼？疼多久了？" onkeydown="if(event.key==='Enter')hSend()">
-      <button class="btn" onclick="hSend()">提问</button>
-      <button class="btn green" onclick="hScore()">完成采集评分</button></div>
+      <button class="btn" onclick="hSend()">提问</button></div>
+    </div>
+    <div class="cc-box" style="margin-top:10px">
+      <div class="section-title">② 医生初步考虑（问诊结束后填写，不计入问诊分）</div>
+      <div class="field"><label>列出你考虑的可能疾病，<b>两种以上</b>，把<b>最可能的排在第一个</b>（只写疾病名称、<b>不用写牙位</b>；可用顿号/逗号分隔，或逐条写）</label>
+      <textarea id="hImp" rows="2" placeholder="如：急性牙髓炎、急性龈乳头炎、三叉神经痛"></textarea></div>
+      <button class="btn green" onclick="hScore()">完成采集评分</button>
     </div>
     <div id="hResult"></div>`;
   const r = await fetch(`/train/api/history/start/${curCase}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
@@ -158,10 +184,34 @@ async function hSend(){
   const d=await r.json(); addMsg('pt',d.reply,'hChat');
 }
 async function hScore(){
-  const r=await fetch('/train/api/history/score',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const payload={impression:val('hImp')};
+  const r=await fetch('/train/api/history/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   const d=await r.json();
+  if(d.error){ alert(d.error); return; }
   let html=`<div class="cc-box" style="margin-top:12px"><div class="score-big">${d.score}<small> /100</small></div>
     <div style="text-align:center;font-size:13px;color:#777">问到 ${d.covered}/${d.total} 个病史要点，共提问 ${d.question_count} 句</div>`;
+  // 第二部分：可能疾病排序对照
+  if(d.impression){
+    const im=d.impression;
+    const badge={correct:'<span class="ok">✔ 首位判断正确</span>',
+      partial:'<span style="color:#c80">◐ 基本对、但首位或分型需调整</span>',
+      wrong:'<span class="no">✘ 首位判断不对</span>'}[im.level];
+    const orderTxt=im.expected_order.map((x,i)=>(i===0?'①最可能：':'　　　：')+x).join('<br>');
+    html+=`<div class="section-title">② 医生初步考虑 · 对照（不计入问诊分）</div>`;
+    if(im.your_list && im.your_list.length){
+      html+=`<div style="font-size:13px;margin:4px 0">你列的顺序：`+
+        im.your_list.map((x,i)=>`<span style="margin-right:8px">${i===0?'①':'　'}${x}${i===0?'（最可能）':''}</span>`).join('')+`</div>`;
+    }
+    html+=`<div style="font-size:13px;margin:4px 0">${badge} &nbsp;（你列了 ${im.your_list?im.your_list.length:0} 种${im.enough?'':'，要求两种以上'}）</div>`;
+    if(!im.ordered_right && im.target_at>=1) html+=`<div class="block" style="font-size:12.5px">正确的疾病你想到了，但没有排在第一位——临床上最可能的诊断应放首位。</div>`;
+    if(im.first_match==='core') html+=`<div class="block" style="font-size:12.5px">疾病大类对了，但分型还需更准确（注意区分急/慢性、可复/不可复等）。</div>`;
+    if(im.level==='wrong') html+=`<div class="block" style="font-size:12.5px">首位方向不对，结合疼痛特点再想想。</div>`;
+    html+=`<div style="font-size:12.5px;margin:6px 0;background:#f5f8fc;padding:8px;border-radius:6px"><b>参考答案（按可能性排序）</b><br>${orderTxt}</div>`;
+    if(im.diff_total){
+      html+=`<div style="font-size:12.5px;margin:6px 0"><b>你还覆盖到</b> ${im.diff_hit}/${im.diff_total} 个应考虑的鉴别：`+
+        im.diff_rows.map(x=>`${x.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'}${x.name}`).join('、')+`</div>`;
+    }
+  }
   d.cat_stats.forEach(c=>{ html+=`<div class="bar-row"><div class="lab">${c.cat}</div><div class="track"><div class="fill" style="width:${c.pct}%"></div></div><div class="val">${c.hit}/${c.total}</div></div>`; });
   if(d.critical_missed.length) html+=`<div class="block">⚠️ 关键项遗漏（加重扣分）：${d.critical_missed.join('、')}</div>`;
   html+=`<div class="section-title">问诊要点对照</div>`;
