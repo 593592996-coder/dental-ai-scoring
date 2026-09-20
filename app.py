@@ -26,6 +26,7 @@ from scoring_xray import 根管X光片评估引擎, SCORING_CONFIG as XRAY_CONFI
 from scoring_crown_anterior import 前牙全瓷冠评分引擎
 from scoring_crown_posterior import 后牙全瓷冠评分引擎
 from scoring_crown_common import SLOTS as CROWN_SLOTS
+from scoring_impression import 藻酸盐取模评分引擎, SCORING_CONFIG as IMPRESSION_CONFIG
 from cases_consult import CASES as CONSULT_CASES
 from chat_matcher import match_answer, log_unmatched, normalize_text
 
@@ -87,7 +88,7 @@ scoring_history = []
 
 # 启动时加载历史报告（仅II类洞，跳过开髓/根管X光/全瓷冠报告）
 for f in sorted(REPORT_FOLDER.glob('*.json')):
-    if f.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
+    if f.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_', 'impression_')):
         continue
     try:
         with open(f, 'r', encoding='utf-8') as fh:
@@ -205,6 +206,12 @@ def crown_post_index():
            'teeth': ['16', '26', '36', '46'], 'endpoint': '/analyze_crown_post',
            'occlusal_label': '③合面位（俯视功能尖斜面/合面间隙）'}
     return render_template('crown.html', cfg=cfg, slots=CROWN_SLOTS)
+
+
+@app.route('/impression')
+def impression_index():
+    """藻酸盐印模制取（上颌+下颌）— 学生端"""
+    return render_template('impression.html')
 
 
 # ═══════════════════════════════
@@ -991,6 +998,7 @@ def view_report(session_id):
         ('xray',      REPORT_FOLDER / f'xray_{session_id}.json', f'xray_{session_id}_'),
         ('crown_ant', REPORT_FOLDER / f'crown_ant_{session_id}.json', f'crown_ant_{session_id}_'),
         ('crown_post',REPORT_FOLDER / f'crown_post_{session_id}.json', f'crown_post_{session_id}_'),
+        ('impression',REPORT_FOLDER / f'impression_{session_id}.json', f'impression_{session_id}_'),
     ]
     module, report_path, photo_prefix = None, None, None
     for m, p, pref in candidates:
@@ -1176,7 +1184,7 @@ def clear_all():
 
     reports_deleted = 0
     for p in REPORT_FOLDER.glob('*.json'):
-        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
+        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_', 'impression_')):
             continue
         try:
             p.unlink()
@@ -1186,7 +1194,7 @@ def clear_all():
 
     photos_deleted = 0
     for p in UPLOAD_FOLDER.glob('*'):
-        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_')):
+        if p.name.startswith(('endo_', 'xray_', 'crown_ant_', 'crown_post_', 'impression_')):
             continue
         if not p.is_file():
             continue
@@ -1381,6 +1389,85 @@ def analyze_crown_post():
     """后牙全瓷冠预备 AI分析（16/26/36/46，不含7号牙）"""
     return _run_crown(后牙全瓷冠评分引擎(), 'crown_post',
                       request.form.get('tooth', '16'), ['16', '26', '36', '46'])
+
+
+
+def _save_one(f, prefix, session_id, jaw):
+    if not (f and f.filename and allowed_file(f.filename)):
+        return None
+    ext = f.filename.rsplit('.', 1)[1].lower()
+    fp = UPLOAD_FOLDER / f'{prefix}_{session_id}_{jaw}_{int(time.time())}.{ext}'
+    save_image_compressed(f, fp)
+    return str(fp)
+
+
+@app.route('/analyze_impression', methods=['POST'])
+def analyze_impression():
+    """藻酸盐印模制取 AI分析：上颌+下颌各1张。"""
+    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
+    session_id = uuid.uuid4().hex[:8]
+
+    up_path = _save_one(request.files.get('upper'), 'impression', session_id, 'upper')
+    lo_path = _save_one(request.files.get('lower'), 'impression', session_id, 'lower')
+    if not up_path and not lo_path:
+        return jsonify({'error': '请至少上传上颌或下颌一张清晰照片（支持jpg/png）。'}), 400
+
+    try:
+        combined, upper, lower = 藻酸盐取模评分引擎().analyze_set(
+            [up_path] if up_path else [], [lo_path] if lo_path else [])
+    except Exception as e:
+        app.logger.exception('印模分析异常: %s', e)
+        return jsonify({'error': '分析时出现异常，请按拍摄规范重拍清晰照片后重试。'}), 422
+    if combined is None:
+        hint = '；'.join([x for x in
+                          ((upper.error if upper else None), (lower.error if lower else None)) if x])
+        return jsonify({'error': '未能识别印模主体。' + (hint or '请使用反差衬底、全弓入镜、组织面朝上重拍。')}), 422
+
+    dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
+             'percentage': round(d.score / d.max_score * 100, 1) if d.max_score else 0,
+             'detail': d.detail, 'status': d.status, 'unit': d.unit,
+             'process_analysis': d.process_analysis,
+             'targeted_suggestion': d.targeted_suggestion}
+            for d in combined.dimensions]
+    ts = combined.total_score
+
+    # 整体评估
+    weak = min(combined.dimensions, key=lambda d: d.score / d.max_score)
+    jaw_txt = []
+    if combined.upper_present:
+        jaw_txt.append(f'上颌 {combined.upper_score} 分')
+    if combined.lower_present:
+        jaw_txt.append(f'下颌 {combined.lower_score} 分')
+    cap_txt = f'因{"严重变形" if any(getattr(j,"severe_deformity",False) for j in (upper,lower) if j) else "关键区缺料"}，综合分已封顶 {ts} 分。' if combined.cap else ''
+    miss = '本次仅上传了一颌，缺失颌按60%保底计分，建议补齐上下颌后重测。' \
+        if not (combined.upper_present and combined.lower_present) else ''
+    water_txt = '检出积水反光，灌模前务必吹干。' if combined.water_warning else ''
+    overall = (f'综合成绩 {ts}/100（{"、".join(jaw_txt)}）。'
+               f'最需改进的是「{weak.name}」。{cap_txt}{water_txt}{miss}'
+               '规则CV为形态学近似判断，最终以教师复核为准。')
+
+    result = {
+        'session_id': session_id, 'student_number': student_number,
+        'student_name': student_name, 'student_class': student_class,
+        'module_title': '藻酸盐印模制取',
+        'total_score': ts, 'max_total': 100, 'percentage': round(ts, 1),
+        'grade': ('优秀' if ts >= 90 else '良好' if ts >= 80 else
+                  '中等' if ts >= 70 else '及格' if ts >= 60 else '不及格'),
+        'upper_present': combined.upper_present, 'lower_present': combined.lower_present,
+        'upper_score': combined.upper_score, 'lower_score': combined.lower_score,
+        'water_warning': combined.water_warning, 'cap': combined.cap,
+        'dimensions': dims,
+        'suggestions': [d.targeted_suggestion for d in combined.dimensions
+                        if d.status in ('warning', 'bad') and d.targeted_suggestion][:5],
+        'photo_count': int(bool(up_path)) + int(bool(lo_path)),
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'overall_assessment': overall,
+        'strengths': combined.strengths, 'weaknesses': combined.weaknesses,
+        'disclaimer': 'AI初评由2D照片经规则视觉近似评估，气泡/变形等为参考判断，仅供教学参考，以教师复核为准。',
+    }
+    with open(REPORT_FOLDER / f'impression_{session_id}.json', 'w', encoding='utf-8') as fh:
+        json.dump(result, fh, ensure_ascii=False, indent=2)
+    return jsonify(result)
 
 
 if __name__ == '__main__':

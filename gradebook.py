@@ -25,12 +25,14 @@ MODULES = [
     ('xray', '根管X光'),
     ('crown_ant', '前牙全瓷冠'),
     ('crown_post', '后牙全瓷冠'),
+    ('impression', '印模制取'),
     ('thinking', '临床思维'),
 ]
 MODULE_NAME = dict(MODULES)
 SCORING_MODULES = [k for k, _ in MODULES if k != 'thinking']
 
-_PREFIX = {'endo_': 'endo', 'xray_': 'xray', 'crown_ant_': 'crown_ant', 'crown_post_': 'crown_post'}
+_PREFIX = {'endo_': 'endo', 'xray_': 'xray', 'crown_ant_': 'crown_ant',
+           'crown_post_': 'crown_post', 'impression_': 'impression'}
 _JUNK_NAMES = {'匿名', '未知', 'test', 'testing', '测试', '测试学生', '冒烟', '123456', '同学', '学生'}
 
 

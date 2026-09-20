@@ -25,7 +25,8 @@ OUT_DIR = os.path.join(BASE, '成绩导出')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 _PREFIX_PATH = {'class2': '', 'endo': 'endo_', 'xray': 'xray_',
-                'crown_ant': 'crown_ant_', 'crown_post': 'crown_post_'}
+                'crown_ant': 'crown_ant_', 'crown_post': 'crown_post_',
+                'impression': 'impression_'}
 
 
 def admin_password():

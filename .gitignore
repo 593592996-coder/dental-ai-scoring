@@ -21,3 +21,6 @@ admin_password.txt
 # 大模型密钥配置（勿提交）
 llm_config.json
 consult_logs/llm_cache.json
+
+# 取模真实照片样本（学生隐私，不入库）
+samples/
