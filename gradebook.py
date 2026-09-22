@@ -181,7 +181,9 @@ def collect():
             klass = canon
         row = ensure(sid, name or roster.get(sid, {}).get('name', ''),
                      klass or roster.get(sid, {}).get('class', ''))
-        m = row['modules'].setdefault(mod, {'best': None, 'latest': None, 'report_id': None, 'ts': ''})
+        m = row['modules'].setdefault(mod, {'best': None, 'latest': None,
+                                            'report_id': None, 'ts': '', 'all': []})
+        m['all'].append({'ts': ts, 'score': score, 'report_id': rep_id})
         if m['best'] is None or score > m['best']:
             m['best'] = score; m['report_id'] = rep_id
         if ts >= m['ts']:
@@ -201,11 +203,37 @@ def collect():
         row['thinking_detail'] = {'history': t['history'], 'analysis': t['analysis'],
                                   'reasoning': t['reasoning'], 'final': t['final']}
 
+    # 各板块每次成绩按提交时间排序（文件按会话ID遍历，时间未必有序）
+    for row in rows.values():
+        for m in row['modules'].values():
+            m['all'].sort(key=lambda x: x['ts'])
+
     # 3) 补齐花名册信息
     for sid, st in roster.items():
         row = ensure(sid, st['name'], st['class'])
         row['in_roster'] = True
     return rows, unmatched, junk
+
+
+def practice_progress(module, min_submit=3):
+    """某板块"练习曲线"成效：只取提交满 min_submit 次及以上的学生。
+    返回每人一条：学号/姓名/班级/提交次数/各次分/第一次/最高分/最后一次/提升值。"""
+    rows, _, _ = collect()
+    out = []
+    for sid, r in rows.items():
+        m = r['modules'].get(module)
+        if not m:
+            continue
+        scores = [x['score'] for x in m['all']]
+        if len(scores) < min_submit:
+            continue
+        first, last = scores[0], scores[-1]
+        out.append({'sid': sid, 'name': r['name'], 'class': r.get('class', ''),
+                    'n': len(scores), 'scores': scores,
+                    'first': first, 'best': max(scores), 'last': last,
+                    'gain': round(last - first, 1)})
+    out.sort(key=lambda x: (x['class'], x['sid']))
+    return out
 
 
 def class_rows(klass=''):

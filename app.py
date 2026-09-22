@@ -29,6 +29,9 @@ from scoring_crown_common import SLOTS as CROWN_SLOTS
 from scoring_impression import 藻酸盐取模评分引擎, SCORING_CONFIG as IMPRESSION_CONFIG
 from cases_consult import CASES as CONSULT_CASES
 from chat_matcher import match_answer, log_unmatched, normalize_text
+import exams
+import gradebook
+import exam_seed   # 启动时自动播种内置考试（公网 git pull 后无需手动传题传片）
 
 # 问诊系统路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +66,12 @@ try:
     app.register_blueprint(admin_bp)
 except Exception as _e:
     print('⚠️ 统一教师后台加载失败:', _e)
+
+try:
+    from exams_admin import bp as exams_admin_bp
+    app.register_blueprint(exams_admin_bp)
+except Exception as _e:
+    print('⚠️ 考试管理后台加载失败:', _e)
 
 
 def _current_student():
@@ -186,7 +195,13 @@ def endo_index():
 
 @app.route('/xray')
 def xray_index():
-    """根管X光片评估 — 学生端"""
+    """根管X光片评估 — 学生端（练习端口，按老师设置的时间窗口开放）"""
+    me = _current_student()
+    # 未登录：先让 identity.js 弹登录门；登录后刷新时才验练习窗口
+    if me['sid'] and not exams.practice_allowed('xray', me['sid'], me['class']):
+        win = exams.get_practice_window('xray')
+        return render_template('practice_closed.html',
+                               module_name='根管X光片练习', win=win), 403
     return render_template('xray.html', config=XRAY_CONFIG)
 
 
@@ -1281,7 +1296,10 @@ def analyze_endo():
 
 @app.route('/analyze_xray', methods=['POST'])
 def analyze_xray():
-    """根管X光片AI分析"""
+    """根管X光片AI分析（练习端；未在开放窗口内一律拒绝，考试收卷不走此路由）"""
+    me = _current_student()
+    if me['sid'] and not exams.practice_allowed('xray', me['sid'], me['class']):
+        return jsonify({'error': '练习端口暂未开放，请等待老师统一开放。'}), 403
     if 'photos' not in request.files:
         return jsonify({'error': '未上传X光片'}), 400
     files = request.files.getlist('photos')
@@ -1318,6 +1336,111 @@ def analyze_xray():
     with open(REPORT_FOLDER / f'xray_{session_id}.json', 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     return jsonify(result)
+
+
+@app.route('/api/my_progress')
+def my_progress():
+    """学生本人的成长曲线数据：每个板块每次练习的分数（按时间排序）。
+    只返回登录学生自己的数据；练习类提交，不含正式考试。"""
+    me = _current_student()
+    if not me['sid']:
+        return jsonify({'error': '请先登录'}), 401
+    rows, _, _ = gradebook.collect()
+    r = rows.get(me['sid'])
+    modules = []
+    if r:
+        for key, cname in gradebook.MODULES:
+            if key == 'thinking':
+                continue
+            m = r['modules'].get(key)
+            if not m:
+                continue
+            scores = [x['score'] for x in m.get('all', [])]
+            if not scores:
+                continue
+            modules.append({'key': key, 'name': cname, 'scores': scores,
+                            'n': len(scores), 'first': scores[0],
+                            'last': scores[-1], 'best': max(scores),
+                            'gain': round(scores[-1] - scores[0], 1)})
+    return jsonify({'sid': me['sid'], 'name': me['name'], 'class': me['class'],
+                    'today': datetime.now().strftime('%Y-%m-%d'), 'modules': modules})
+
+
+@app.route('/growth')
+def growth_page():
+    """学生成长折线图页。"""
+    return render_template('growth.html')
+
+
+# ── 考试模式：学生端（看卷 / 交卷）。建考与管理在教师后台 ──
+EXAM_UPLOAD_FOLDER = BASE_DIR / 'exam_data' / 'uploads'
+EXAM_UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+
+
+@app.route('/exam/<exam_id>')
+def exam_page(exam_id):
+    """学生考试入口：按登录身份与时间渲染作答/已提交/未开始等状态。"""
+    me = _current_student()
+    if not me['sid']:
+        # 未登录：identity.js 会先弹登录门，这里给空身份让页面能渲染
+        me = {'sid': '', 'name': '', 'class': ''}
+    state, exam = exams.exam_status(exam_id, me['sid'], me['class'])
+    submission = exams.get_submission(exam_id, me['sid']) if me['sid'] else None
+    return render_template('exam.html', exam=exam, state=state, submission=submission)
+
+
+@app.route('/exam/<exam_id>/film')
+def exam_film(exam_id):
+    """发卷用X光片：登录后、班级匹配且考试已开始才提供（不开放给未到时间的人）。"""
+    from flask import abort
+    me = _current_student()
+    if not me['sid']:
+        return jsonify({'error': '请先登录'}), 401
+    exam = exams.get_exam(exam_id)
+    if not exam or exam.get('kind') != 'xray_read':
+        abort(404)
+    state, _ = exams.exam_status(exam_id, me['sid'], me['class'])
+    # open / submitted 都允许看图；未开始、班级不符不发
+    if state not in ('open', 'submitted'):
+        abort(403)
+    path = exams.film_path(exam)
+    if not path:
+        abort(404)
+    return send_file(path)
+
+
+@app.route('/exam/<exam_id>/submit', methods=['POST'])
+def exam_submit(exam_id):
+    """收卷。看片判读形式收 r* 答案自动判分；上传成品形式收 q* 答案+X光片AI打分。
+    学生端一律只回"已收到"，不回分数。"""
+    me = _current_student()
+    if not me['sid']:
+        return jsonify({'error': '请先登录后再提交'}), 401
+
+    exam = exams.get_exam(exam_id)
+    if not exam:
+        return jsonify({'error': '考试不存在'}), 404
+
+    if exam.get('kind') == 'xray_read':
+        answers = {k: v for k, v in request.form.items() if k.startswith('r')}
+        submission, err = exams.submit_reading(
+            exam_id, me['sid'], me['name'], me['class'], answers)
+    else:
+        files = request.files.getlist('photos')
+        saved = []
+        for i, f in enumerate(files[:2]):
+            if f and f.filename and allowed_file(f.filename):
+                ext = f.filename.rsplit('.', 1)[1].lower()
+                fp = EXAM_UPLOAD_FOLDER / f'{exam_id}_{me["sid"]}_{i}_{int(time.time())}.{ext}'
+                save_image_compressed(f, fp)
+                saved.append(str(fp))
+        quiz_answers = {k: v for k, v in request.form.items() if k.startswith('q')}
+        submission, err = exams.submit(
+            exam_id, me['sid'], me['name'], me['class'],
+            quiz_answers, saved, scorer=xray_engine.analyze)
+    if err:
+        return jsonify({'error': err}), 400
+    return jsonify({'ok': True, 'submitted_at': submission['submitted_at']})
 
 
 def _run_crown(engine, prefix, tooth, allowed_teeth):
@@ -1389,7 +1512,6 @@ def analyze_crown_post():
     """后牙全瓷冠预备 AI分析（16/26/36/46，不含7号牙）"""
     return _run_crown(后牙全瓷冠评分引擎(), 'crown_post',
                       request.form.get('tooth', '16'), ['16', '26', '36', '46'])
-
 
 
 def _save_one(f, prefix, session_id, jaw):

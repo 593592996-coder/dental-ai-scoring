@@ -235,6 +235,57 @@ def export_full():
                     'unmatched': len(unmatched)})
 
 
+@bp.route('/admin/api/practice_progress')
+def practice_progress_export():
+    """练习成效导出：?module=xray&min=3 → 只含提交≥min次的学生。
+    表1 第一次 vs 最后一次对比（含平均提升）；表2 每次完整成绩。"""
+    import gradebook as gb
+    module = request.args.get('module', 'xray')
+    if module not in dict(MODULES):
+        return jsonify({'error': '板块无效'}), 400
+    try:
+        min_submit = max(2, int(request.args.get('min', 3)))
+    except ValueError:
+        min_submit = 3
+
+    prog = gb.practice_progress(module, min_submit)
+
+    wb = Workbook(); ws = wb.active; ws.title = '第一次vs最后一次'
+    ws.append(['学号', '姓名', '班级', '提交次数', '第一次', '最后一次', '最高分', '提升值'])
+    hf = Font(color='FFFFFF', bold=True); fillp = PatternFill('solid', fgColor='1B3A5C')
+    for c in ws[1]:
+        c.font = hf; c.fill = fillp; c.alignment = Alignment(horizontal='center')
+    gains = []
+    for p in prog:
+        ws.append([p['sid'], p['name'], p['class'], p['n'],
+                   p['first'], p['last'], p['best'], p['gain']])
+        gains.append(p['gain'])
+    if gains:
+        ws.append([])
+        ws.append(['达标人数', len(prog), '', '', '', '平均提升', round(sum(gains)/len(gains), 2)])
+    for i, w in enumerate([20, 12, 22, 9, 9, 9, 9, 9], 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+    ws.freeze_panes = 'A2'
+
+    ws2 = wb.create_sheet('每次完整成绩')
+    max_n = max((p['n'] for p in prog), default=0)
+    ws2.append(['学号', '姓名', '班级'] + [f'第{i}次' for i in range(1, max_n + 1)])
+    for c in ws2[1]:
+        c.font = hf; c.fill = fillp; c.alignment = Alignment(horizontal='center')
+    for p in prog:
+        ws2.append([p['sid'], p['name'], p['class']] +
+                   [p['scores'][i] if i < len(p['scores']) else '' for i in range(max_n)])
+    for i, w in enumerate([20, 12, 22] + [8] * max_n, 1):
+        ws2.column_dimensions[chr(64 + i) if i <= 26 else 'A' + chr(64 + i - 26)].width = w
+    ws2.freeze_panes = 'D2'
+
+    stamp = datetime.now().strftime('%Y%m%d_%H%M')
+    fn = f'练习成效_{MODULE_NAME[module]}_{min_submit}次以上_{stamp}.xlsx'
+    wb.save(os.path.join(OUT_DIR, fn))
+    return jsonify({'ok': True, 'file': fn, 'download': f'/admin/download?f={fn}',
+                    'students': len(prog), 'avg_gain': round(sum(gains)/len(gains), 2) if gains else None})
+
+
 @bp.route('/admin/download')
 def download():
     f = os.path.basename(request.args.get('f', ''))

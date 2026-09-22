@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>考试管理 · 教师后台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8}
+.header{background:linear-gradient(135deg,#1B3A5C,#e67e22);color:#fff;padding:16px 26px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.header h1{font-size:19px}.header a{color:#fff;font-size:13px;margin-left:14px;opacity:.92;text-decoration:none}
+.wrap{max-width:1080px;margin:22px auto;padding:0 16px}
+.card{background:#fff;border-radius:12px;padding:20px 22px;margin-bottom:18px;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.card h2{font-size:16px;color:#1B3A5C;margin-bottom:14px;padding-bottom:9px;border-bottom:2px solid #e67e22;display:flex;justify-content:space-between;align-items:center}
+label.f{display:block;font-size:13px;color:#334;margin:9px 0 4px;font-weight:600}
+input[type=text],input[type=datetime-local],input[type=number],select{width:100%;padding:9px 11px;border:1.5px solid #d5dde6;border-radius:8px;font-size:13.5px}
+input:focus{outline:none;border-color:#e67e22}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{display:inline-block;padding:9px 18px;border:none;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;background:#1B3A5C;color:#fff}
+.btn.o{background:#e67e22}.btn.g{background:#27ae60}.btn.r{background:#c0392b}.btn.gray{background:#7f8c8d}
+.btn.sm{padding:5px 11px;font-size:12px}
+.chkbox{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chkbox label{display:flex;align-items:center;gap:5px;background:#f0f4f8;border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer}
+.chkbox input{accent-color:#e67e22}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:#1B3A5C;color:#fff;padding:8px 7px;text-align:center}
+td{padding:7px;border-bottom:1px solid #eef2f6;text-align:center}
+td.l{text-align:left}
+.pill{display:inline-block;border-radius:12px;padding:2px 10px;font-size:11.5px;background:#eaf2fb;color:#1b4e80}
+.pill.warn{background:#fdebd0;color:#9c5a08}.pill.ok{background:#e8f7ee;color:#1e6e3c}.pill.red{background:#fdecea;color:#8e2b22}
+.note{background:#fff8e1;border:1px solid #f2d98c;border-radius:9px;padding:11px 13px;font-size:12.5px;color:#7d6608;line-height:1.7;margin-bottom:12px}
+.qblock{border:1px solid #e3e9f0;border-radius:10px;padding:14px;margin-bottom:12px;background:#fafbfd}
+.qblock .qh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.qblock .qh b{color:#e67e22;font-size:13.5px}
+.optgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.ansline{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px}
+.ansline select{width:auto;padding:5px 8px}
+.mask{display:none;position:fixed;inset:0;background:rgba(20,35,55,.55);z-index:100;align-items:center;justify-content:center;padding:16px}
+.mask.show{display:flex}
+.modal{background:#fff;border-radius:14px;max-width:880px;width:100%;max-height:90vh;overflow-y:auto;padding:22px 24px}
+.mtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1B3A5C;color:#fff;padding:11px 22px;border-radius:9px;font-size:13.5px;z-index:200;display:none}
+</style></head>
+<body>
+{% if not embedded %}
+<div class="header"><h1>📝 考试模式管理</h1>
+<span><a href="/admin">← 返回成绩总后台</a><a href="/">板块首页</a><a href="/admin/logout">退出</a></span></div>
+{% endif %}
+<div class="wrap" {% if embedded %}style="padding:6px 4px"{% endif %}>
+
+<!-- ① 练习端口开放控制 -->
+<div class="card">
+<h2>🔓 X光片练习端口 · 定时开放</h2>
+<div class="note">摸底考前保持<b>关闭</b>，防止学生提前练习导致摸底分虚高。<br>
+摸底考结束后在此设置开放时间（建议结课考前都保持开放）。</div>
+<div class="chkbox" id="pwClasses"></div>
+<div class="row2" style="margin-top:10px">
+<div><label class="f">开放开始</label><input type="datetime-local" id="pwStart"></div>
+<div><label class="f">开放结束</label><input type="datetime-local" id="pwEnd"></div>
+</div>
+<div style="margin-top:12px"><button class="btn o" onclick="savePractice()">设置开放窗口</button>
+<button class="btn gray" onclick="clearPractice()">立即关闭端口</button>
+<span id="pwState" style="margin-left:12px;font-size:12.5px;color:#667"></span></div>
+</div>
+
+<!-- ② 考试列表 -->
+<div class="card">
+<h2>📋 已建考试 <button class="btn o sm" onclick="openCreate()">＋ 新建考试</button></h2>
+<table><thead><tr><th class="l">考试名称</th><th>班级</th><th>时间</th><th>提交/应考</th><th>状态</th><th>操作</th></tr></thead>
+<tbody id="examRows"><tr><td colspan="6" style="color:#999;padding:16px">加载中…</td></tr></tbody></table>
+<div class="note" style="margin-top:12px">导出"课前课后对比表"：先建并完成两场考试，然后在第一场考试的操作中点<b>课前课后对比</b>，选第二场。</div>
+</div>
+</div>
+
+<!-- ③ 新建考试弹窗 -->
+<div class="mask" id="createMask"><div class="modal">
+<div class="mtop"><h2 style="color:#1B3A5C;font-size:17px">新建考试</h2>
+<button class="btn gray sm" onclick="closeMask('createMask')">关闭</button></div>
+<label class="f">考试名称 *</label><input type="text" id="fName" placeholder="如：根管X光·课前摸底（2025级）">
+<label class="f">参加班级 *</label><div class="chkbox" id="fClasses"></div>
+<div class="row2">
+<div><label class="f">开始时间 *</label><input type="datetime-local" id="fStart"></div>
+<div><label class="f">结束时间 *</label><input type="datetime-local" id="fEnd"></div>
+</div>
+<div class="row2">
+<div><label class="f">选择题分值（0=不考选择）</label><input type="number" id="fQuizMax" value="20" min="0" max="60" step="5"></div>
+<div><label class="f">备注（学生可见）</label><input type="text" id="fNote" placeholder="如：约15分钟，独立完成"></div>
+</div>
+<h2 style="margin-top:16px;font-size:14px;border:none;padding:0">选择题（判分自动完成；X光片判读分=100−选择题分）</h2>
+<div id="quizList"></div>
+<button class="btn sm" style="background:#2B7BEC" onclick="addQuiz()">＋ 添加一道选择题</button>
+<div style="margin-top:18px"><button class="btn g" onclick="submitCreate()">✅ 创建考试并生成链接</button>
+<span id="createErr" style="color:#c0392b;font-size:12.5px;margin-left:10px"></span></div>
+</div></div>
+
+<!-- ④ 明细弹窗 -->
+<div class="mask" id="detailMask"><div class="modal">
+<div class="mtop"><h2 id="dTitle" style="color:#1B3A5C;font-size:17px"></h2>
+<button class="btn gray sm" onclick="closeMask('detailMask')">关闭</button></div>
+<div style="margin-bottom:12px">
+<button class="btn sm o" id="btnCompare">📊 课前课后对比（选另一场）</button>
+<button class="btn sm g" id="btnExport">⬇ 导出本场成绩</button></div>
+<h3 style="font-size:13.5px;color:#1B3A5C;margin:10px 0 6px">已提交</h3>
+<div style="overflow-x:auto"><table><thead id="dSubHead"></thead><tbody id="dSubBody"></tbody></table></div>
+<h3 style="font-size:13.5px;color:#c0392b;margin:14px 0 6px">缺考名单</h3>
+<div style="overflow-x:auto"><table><thead><tr><th>学号</th><th>姓名</th><th>班级</th></tr></thead>
+<tbody id="dAbsent"></tbody></table></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+window.fetch=function(...a){return _fetch.apply(this,a).then(r=>{if(r.status===401)location.href='/admin/login';return r;});};
+const CLASSES = {{ classes|tojson }};
+let examCache = [], quizIdx = 0, currentDetail = null;
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';
+  setTimeout(()=>t.style.display='none',2200);}
+function closeMask(id){document.getElementById(id).classList.remove('show');}
+function boxes(elId, allLabel){
+  const el=document.getElementById(elId);
+  el.innerHTML='<label><input type="checkbox" value="ALL" checked>'+(allLabel||'全体三班')+'</label>'+
+    CLASSES.map((c,i)=>`<label><input type="checkbox" value="${c}">${c.replace('2025级口腔医学','')}</label>`).join('');
+  el.addEventListener('change',()=>{
+    const all=el.querySelector('input[value=ALL]');
+    if(event.target.value==='ALL'){el.querySelectorAll('input').forEach(x=>{if(x!==all)x.checked=false});}
+    else{all.checked=false;}
+  });
+}
+function pickedClasses(elId){
+  const v=[...document.getElementById(elId).querySelectorAll('input:checked')].map(x=>x.value);
+  return v.includes('ALL')?['ALL']:v;
+}
+
+// ── 练习窗口 ──
+function dtLocal(s){if(!s)return'';return s.replace(' ','T');}
+function loadPractice(){
+  fetch('/admin/exams/api/practice').then(r=>r.json()).then(d=>{
+    const w=d.window, el=document.getElementById('pwState');
+    if(!w){el.innerHTML='<span class="pill red">当前：关闭</span>';return;}
+    document.getElementById('pwStart').value=dtLocal(w.start);
+    document.getElementById('pwEnd').value=dtLocal(w.end);
+    document.getElementById('pwClasses').querySelectorAll('input').forEach(x=>x.checked=w.classes.includes(x.value)||w.classes.includes('ALL'));
+    el.innerHTML=`<span class="pill ok">当前：开放中</span> ${w.start} → ${w.end}`;
+  });
+}
+function savePractice(){
+  const body={module:'xray',classes:pickedClasses('pwClasses'),
+    start:document.getElementById('pwStart').value.replace('T',' '),
+    end:document.getElementById('pwEnd').value.replace('T',' ')};
+  if(!body.start||!body.end){toast('请选好起止时间');return;}
+  fetch('/admin/exams/api/practice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{if(d.ok){toast('已设置开放窗口');loadPractice();}else toast(d.error);});
+}
+function clearPractice(){
+  fetch('/admin/exams/api/practice/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module:'xray'})})
+    .then(r=>r.json()).then(()=>{toast('练习端口已关闭');loadPractice();});
+}
+
+// ── 考试列表 ──
+function loadExams(){
+  fetch('/admin/exams/api/list').then(r=>r.json()).then(d=>{
+    examCache=d.exams;
+    const b=document.getElementById('examRows');
+    if(!d.exams.length){b.innerHTML='<tr><td colspan="6" style="color:#999;padding:16px">还没有考试，点"新建考试"开始</td></tr>';return;}
+    b.innerHTML=d.exams.map((e,i)=>{
+      const cls=e.classes.includes('ALL')?'全体三班':e.classes.length+'个班';
+      let st=e.need_review?`<span class="pill warn">${e.need_review}份待复核</span>`:'<span class="pill ok">已全部锁分</span>';
+      return `<tr><td class="l"><b>${e.name}</b></td><td>${cls}</td>
+      <td style="font-size:11.5px">${e.start}<br>${e.end}</td>
+      <td>${e.submitted}/${e.expected}</td><td>${st}</td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="copyLink('${e.id}')">复制链接</button>
+        <button class="btn sm o" onclick="openDetail('${e.id}')">明细/导出</button>
+        <button class="btn sm r" onclick="delExam('${e.id}')">删</button></td></tr>`;
+    }).join('');
+  });
+}
+function copyLink(id){
+  const link=location.origin+'/exam/'+id;
+  navigator.clipboard.writeText(link).then(()=>toast('考试链接已复制：'+link));
+}
+function delExam(id){
+  if(!confirm('确定删除这场考试？（已有学生提交的考试无法删除）'))return;
+  fetch('/admin/exams/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})})
+    .then(r=>r.json()).then(d=>{if(d.ok){toast('已删除');loadExams();}else toast(d.error);});
+}
+
+// ── 新建考试 ──
+function openCreate(){
+  document.getElementById('fName').value='';document.getElementById('fNote').value='';
+  document.getElementById('fQuizMax').value=20;quizIdx=0;
+  document.getElementById('quizList').innerHTML='';addQuiz();
+  document.getElementById('createErr').textContent='';
+  document.getElementById('createMask').classList.add('show');
+}
+function addQuiz(){
+  const i=quizIdx++;
+  const d=document.createElement('div');d.className='qblock';d.id='q'+i;
+  d.innerHTML=`<div class="qh"><b>选择题 ${i+1}</b><button class="btn sm gray" onclick="document.getElementById('q${i}').remove()">移除</button></div>
+  <input type="text" class="qt" placeholder="题干">
+  <div class="optgrid">
+    <input type="text" class="o0" placeholder="选项A"><input type="text" class="o1" placeholder="选项B">
+    <input type="text" class="o2" placeholder="选项C"><input type="text" class="o3" placeholder="选项D"></div>
+  <div class="ansline">正确答案：<select class="ans"><option value="0">A</option><option value="1">B</option>
+    <option value="2">C</option><option value="3">D</option></select></div>`;
+  document.getElementById('quizList').appendChild(d);
+}
+function submitCreate(){
+  const quizBlocks=[...document.querySelectorAll('#quizList .qblock')];
+  const body={name:document.getElementById('fName').value,module:'xray',
+    classes:pickedClasses('fClasses'),
+    start:document.getElementById('fStart').value.replace('T',' '),
+    end:document.getElementById('fEnd').value.replace('T',' '),
+    quiz_max:document.getElementById('fQuizMax').value,
+    note:document.getElementById('fNote').value,
+    quiz_count:quizBlocks.length};
+  quizBlocks.forEach((b,i)=>{
+    body[`q${i}_t`]=b.querySelector('.qt').value;
+    for(let j=0;j<4;j++)body[`q${i}_o${j}`]=b.querySelector('.o'+j).value;
+    body[`q${i}_a`]=b.querySelector('.ans').value;
+  });
+  document.getElementById('createErr').textContent='';
+  fetch('/admin/exams/api/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){closeMask('createMask');loadExams();toast('考试已建好，链接：'+location.origin+d.link);}
+      else document.getElementById('createErr').textContent=d.error;
+    });
+}
+
+// ── 明细 ──
+function openDetail(id){
+  fetch('/admin/exams/api/detail/'+id).then(r=>r.json()).then(d=>{
+    if(d.error){toast(d.error);return;}
+    currentDetail=d;
+    document.getElementById('dTitle').textContent=d.exam.name;
+    const hasQuiz=(d.exam.quiz_max||0)>0;
+    document.getElementById('dSubHead').innerHTML='<tr><th>学号</th><th class="l">姓名</th><th>班级</th>'+
+      (hasQuiz?'<th>选择</th><th>判读</th>':'')+'<th>总分</th><th>状态</th><th>提交时间</th></tr>';
+    document.getElementById('dSubBody').innerHTML=d.submissions.map(s=>
+      `<tr><td>${s.sid}</td><td class="l">${s.name}</td><td>${(s.class||'').replace('2025级口腔医学','')}</td>`+
+      (hasQuiz?`<td>${s.quiz_score??''}</td><td>${s.skill_score??''}</td>`:'')+
+      `<td><b>${s.total_score??''}</b></td>
+      <td>${s.status==='graded'?'<span class="pill ok">已锁分</span>':'<span class="pill warn">待复核</span>'}</td>
+      <td style="font-size:11px">${s.submitted_at}</td></tr>`).join('')||'<tr><td colspan="8" style="color:#999">暂无提交</td></tr>';
+    document.getElementById('dAbsent').innerHTML=d.absent.map(a=>
+      `<tr><td>${a.sid}</td><td>${a.name}</td><td>${a.class.replace('2025级口腔医学','')}</td></tr>`).join('')
+      ||'<tr><td colspan="3" style="color:#999">无缺考 🎉</td></tr>';
+    document.getElementById('detailMask').classList.add('show');
+  });
+}
+document.getElementById('btnExport').onclick=()=>{
+  if(currentDetail)location.href='/admin/exams/api/export/'+currentDetail.exam.id;
+};
+document.getElementById('btnCompare').onclick=()=>{
+  const others=examCache.filter(e=>currentDetail&&e.id!==currentDetail.exam);
+  if(!others.length){toast('需要再建另一场考试（课后考）');return;}
+  const picked=prompt('把"课后考试"的链接或ID粘贴到这里：\n\n可选ID：\n'+others.map(e=>e.id+'（'+e.name+'）').join('\n'));
+  if(picked){const id=(picked.split('/exam/')[1]||picked).trim();
+    location.href='/admin/exams/api/compare?pre='+currentDetail.exam.id+'&post='+id;}
+};
+
+// ── 初始化 ──
+boxes('pwClasses');boxes('fClasses');
+loadPractice();loadExams();
+</script>
+</body></html>

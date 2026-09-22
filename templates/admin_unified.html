@@ -8,6 +8,9 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#eef2f7;color:#222}
 .header{background:linear-gradient(135deg,#16324f,#1f5f8b);color:#fff;padding:13px 22px;display:flex;justify-content:space-between;align-items:center}
 .header h1{font-size:18px}.header a{color:#fff;font-size:12px;margin-left:14px;text-decoration:none;opacity:.9}
 .wrap{max-width:1240px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;max-width:1180px;margin:14px auto 0;padding:0 16px}
+.tab{padding:10px 20px;border:none;border-radius:10px 10px 0 0;font-size:14px;font-weight:700;cursor:pointer;background:#d9e2ec;color:#5a6b7b;font-family:inherit}
+.tab.active{background:#fff;color:#1B3A5C;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
 .bar{background:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 select{padding:8px 11px;border:1.5px solid #cfd8e3;border-radius:8px;font-size:13px;font-family:inherit}
 .btn{padding:9px 15px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449);font-family:inherit}
@@ -37,13 +40,19 @@ a.rl{font-size:11px;color:#2B7BEC}
 <body>
 <div class="header"><h1>📊 教师后台 · 全板块成绩</h1>
 <span><a href="/">板块首页</a><a href="/train">临床思维训练</a><a href="/admin/logout">退出后台</a></span></div>
+<div class="tabs">
+  <button class="tab active" id="tabBtnGrades" onclick="switchTab('grades')">📈 成绩总览</button>
+  <button class="tab" id="tabBtnExams" onclick="switchTab('exams')">📝 考试管理</button>
+</div>
 <div class="wrap">
+ <div id="tabGrades">
   <div class="bar">
     <label style="font-size:13px;font-weight:700;color:#1B3A5C">班级</label>
     <select id="klass" onchange="load()"><option value="">全部</option></select>
     <button class="btn b" onclick="load()">刷新</button>
     <button class="btn" onclick="openWizard('school')">⬇ 导出学校成绩表(.xls)</button>
     <button class="btn o" onclick="openWizard('full')">⬇ 导出全量总表(.xlsx)</button>
+    <button class="btn b" onclick="exportPractice()">📈 练习成效(第一次vs最后一次)</button>
     <span class="muted" id="tip"></span>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -53,6 +62,11 @@ a.rl{font-size:11px;color:#2B7BEC}
     <div style="overflow-x:auto"><table id="tbl"><thead></thead><tbody></tbody></table></div>
   </div>
   <div class="panel"><h3>历史成绩待核对（老数据无学号，需人工确认）</h3><div id="unmatched" class="muted"></div></div>
+ </div>{# ── /tabGrades ── #}
+
+ <div id="tabExams" style="display:none">
+  <iframe id="examsFrame" src="about:blank" style="width:100%;min-height:1400px;border:none;border-radius:12px;background:#fff"></iframe>
+ </div>
 </div>
 
 <div id="mask"><div class="sheet">
@@ -63,6 +77,33 @@ a.rl{font-size:11px;color:#2B7BEC}
 <script>
 const _fetch=window.fetch;
 window.fetch=function(...a){return _fetch.apply(this,a).then(r=>{if(r.status===401)location.href='/admin/login';return r;});};
+
+// ── 练习成效导出（第一次 vs 最后一次，只含提交≥3次者）──
+async function exportPractice(){
+  const module='xray', min=3;
+  const tip=document.getElementById('tip');tip.textContent='正在统计…';
+  try{
+    const d=await (await fetch(`/admin/api/practice_progress?module=${module}&min=${min}`)).json();
+    if(!d.ok){tip.textContent=d.error||'失败';return;}
+    tip.textContent=`达标${d.students}人 · 平均提升${d.avg_gain}分`;
+    location.href=d.download;
+  }catch(e){tip.textContent='网络异常';}
+}
+
+// ── 标签页切换：成绩总览 / 考试管理（内嵌，不跳走）──
+function switchTab(which){
+  const g=document.getElementById('tabGrades'),e=document.getElementById('tabExams');
+  const bg=document.getElementById('tabBtnGrades'),be=document.getElementById('tabBtnExams');
+  if(which==='exams'){
+    g.style.display='none';e.style.display='block';
+    bg.classList.remove('active');be.classList.add('active');
+    const f=document.getElementById('examsFrame');
+    if(f.src.endsWith('about:blank')) f.src='/admin/exams?embedded=1';
+  }else{
+    e.style.display='none';g.style.display='block';
+    be.classList.remove('active');bg.classList.add('active');
+  }
+}
 let D=null; const SCHOOL_COLS=['平时','期末','技能','月考1','月考2','月考3'];
 function sc(v){if(v==null)return '<span class="muted">—</span>';const c=v>=85?'hi':v>=60?'mid':'lo';return `<span class="s ${c}">${v}</span>`;}
 async function load(){

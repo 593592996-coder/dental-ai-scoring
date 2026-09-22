@@ -22,5 +22,6 @@ admin_password.txt
 llm_config.json
 consult_logs/llm_cache.json
 
-# 取模真实照片样本（学生隐私，不入库）
-samples/
+# 考试模式：考卷与锁分成绩（隐私，不入库）
+exam_data/
+backup_*/

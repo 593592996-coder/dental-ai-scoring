@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>练习暂未开放</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.box{background:#fff;border-radius:16px;padding:44px 40px;max-width:440px;width:90%;text-align:center;box-shadow:0 6px 28px rgba(0,0,0,.1)}
+.icon{font-size:58px;margin-bottom:14px}
+h1{font-size:20px;color:#1B3A5C;margin-bottom:10px}
+p{font-size:14px;color:#667;line-height:1.8}
+.win{margin-top:16px;background:#fff8e1;border:1px solid #f2d98c;border-radius:10px;padding:12px;font-size:13px;color:#8a6d1a;line-height:1.8}
+a{display:inline-block;margin-top:20px;color:#e67e22;text-decoration:none;font-size:14px}
+</style></head>
+<body>
+<div class="box">
+<div class="icon">🔒</div>
+<h1>{{ module_name }}暂未开放</h1>
+<p>老师会在课前摸底考试结束后统一开放练习，<br>请耐心等待，不用提前练习。</p>
+{% if win %}
+<div class="win">开放时间：<br><b>{{ win.start }}</b><br>至 <b>{{ win.end }}</b></div>
+{% endif %}
+<a href="/">← 返回首页</a>
+</div>
+</body></html>

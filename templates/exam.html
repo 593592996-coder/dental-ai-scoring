@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ exam.name if exam else '考试' }}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100vh}
+.header{background:linear-gradient(135deg,#1B3A5C,#e67e22);color:#fff;padding:22px 0;text-align:center}
+.header h1{font-size:24px;font-weight:700}.header p{font-size:13px;opacity:.85;margin-top:5px}
+.container{max-width:860px;margin:26px auto;padding:0 18px}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:18px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.card h2{font-size:17px;color:#1B3A5C;margin-bottom:14px;padding-bottom:9px;border-bottom:2px solid #e67e22}
+.meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.meta span{background:#f0f4f8;border-radius:20px;padding:5px 13px;font-size:12.5px;color:#1B3A5C}
+.banner{border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.8;margin-bottom:14px}
+.banner.warn{background:#fef3e2;border:1px solid #f5c88a;color:#9c5a08}
+.banner.info{background:#eaf2fb;border:1px solid #b9d4f2;color:#1b4e80}
+.banner.ok{background:#e8f7ee;border:1px solid #9ed8b5;color:#1e6e3c}
+.banner.stop{background:#fdecea;border:1px solid #f3b6b0;color:#8e2b22}
+.qitem{padding:14px 16px;background:#fafbfd;border:1px solid #e6ecf3;border-radius:10px;margin-bottom:12px}
+.qitem .qt{font-size:14.5px;color:#2C3E50;font-weight:600;margin-bottom:10px}
+.qitem .qt b{color:#e67e22;margin-right:5px}
+.opt{display:flex;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:#34495e}
+.opt:hover{background:#f3f7fc}
+.opt input{margin-right:9px;width:16px;height:16px;accent-color:#e67e22}
+.upload-zone{border:2px dashed #e67e22;border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:.3s;background:#fffdf5}
+.upload-zone:hover{background:#fef9e7}
+.upload-zone .icon{font-size:42px;margin-bottom:8px}
+.upload-zone .text{font-size:14.5px;color:#2C3E50}.upload-zone .hint{font-size:12px;color:#999;margin-top:5px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:12px}
+.preview-item{position:relative;border-radius:8px;overflow:hidden;background:#000}
+.preview-item img{width:100%;height:150px;object-fit:contain;display:block}
+.preview-item .remove{position:absolute;top:4px;right:4px;background:rgba(255,0,0,.8);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:14px}
+.btn{display:inline-block;padding:12px 30px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,#e67e22,#d35400);color:#fff;width:100%}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(230,126,34,.4)}
+.btn-primary:disabled{background:#ccc;cursor:not-allowed;transform:none}
+.confirm-line{display:flex;align-items:center;font-size:13px;color:#5a6b7b;margin:14px 0}
+.confirm-line input{margin-right:8px;width:16px;height:16px;accent-color:#e67e22}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;justify-content:center;align-items:center}
+.loading-overlay.show{display:flex}.loading-box{background:#fff;border-radius:16px;padding:36px;text-align:center}
+.spinner{width:48px;height:48px;border:4px solid #eee;border-top:4px solid #e67e22;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.back-link{display:block;text-align:center;margin-top:6px;color:#e67e22;text-decoration:none;font-size:14px}
+.bigicon{font-size:54px;text-align:center;margin-bottom:10px}
+</style></head>
+<body>
+<div class="header"><h1>📝 {{ exam.name if exam else '考试' }}</h1>
+<p>{% if state == 'open' %}考试模式 · 限时作答 · 只能提交一次{% else %}口腔临床训练平台{% endif %}</p></div>
+<div class="container">
+
+{% if state == 'not_found' %}
+<div class="card"><div class="bigicon">❓</div><h2 style="text-align:center;border:none">没有找到这场考试</h2>
+<p style="text-align:center;font-size:13.5px;color:#778">请确认链接是否正确，或联系老师。</p></div>
+
+{% elif state == 'class_not_allowed' %}
+<div class="card"><div class="bigicon">🚫</div><h2 style="text-align:center;border:none">你的班级不在本场考试名单内</h2>
+<p style="text-align:center;font-size:13.5px;color:#778">如有疑问请联系老师。</p></div>
+
+{% elif state == 'not_started' %}
+<div class="card"><div class="bigicon">⏰</div><h2 style="text-align:center;border:none">考试还没开始</h2>
+<p style="text-align:center;font-size:14px;color:#556">开始时间：<b>{{ exam.start }}</b></p></div>
+
+{% elif state == 'ended' %}
+<div class="card"><div class="bigicon">⌛</div><h2 style="text-align:center;border:none">考试已结束</h2>
+<p style="text-align:center;font-size:14px;color:#556">结束时间：{{ exam.end }}，你未在规定时间内提交。</p></div>
+
+{% elif state == 'submitted' %}
+<div class="card"><div class="bigicon">✅</div><h2 style="text-align:center;border:none">你已成功提交</h2>
+<div class="banner ok" style="text-align:center">试卷已上交，等待老师统一公布成绩。<br>
+<b>考试期间系统不显示分数和批改</b>，请安心准备其他内容。</div>
+{% if submission and submission.submitted_at %}
+<p style="text-align:center;font-size:12.5px;color:#999">提交时间：{{ submission.submitted_at }}</p>{% endif %}
+</div>
+
+{% else %} {# ───── state == 'open'：作答界面 ───── #}
+<div class="card">
+<h2>📋 {{ exam.name }}</h2>
+<div class="meta">
+<span>🕐 {{ exam.start }} — {{ exam.end }}</span>
+{% if exam.kind == 'xray_read' %}<span>满分 100 分 · {{ exam.questions|length }} 道判读题</span>
+{% elif exam.quiz_max %}<span>选择题 {{ exam.quiz_max }} 分</span>
+<span>X光片判读 {{ exam.skill_max }} 分</span>{% else %}<span>满分 100 分</span>{% endif %}
+</div>
+<div class="banner warn">⚠️ <b>本场为考试，请注意：</b><br>
+① 只能<b>提交一次</b>，提交后<b>不能修改、不能重交</b>；<br>
+② 提交后<b>看不到分数</b>，成绩由老师之后统一公布；<br>
+③ 请独立完成，不要交流；考试时间结束将自动收卷。</div>
+{% if exam.note %}<div class="banner info">📌 {{ exam.note }}</div>{% endif %}
+</div>
+
+{% if exam.kind == 'xray_read' %}
+{# ───── 看片判读形式 ───── #}
+<div class="card">
+<h2>🩻 请仔细观察下面这张根管X光片</h2>
+<img src="/exam/{{ exam.id }}/film" alt="根管X光片" style="width:100%;border-radius:10px;border:1px solid #e3e9f0">
+</div>
+<div class="card">
+<h2>判读题（共 {{ exam.questions|length }} 题，每题 {{ (100/exam.questions|length)|round(1) }} 分）</h2>
+{% for item in exam.questions %}
+<div class="qitem">
+<div class="qt"><b>{{ loop.index }}.</b>{{ item.q }}</div>
+{% for op in item.options %}
+<label class="opt"><input type="radio" name="r{{ loop.index0 }}" value="{{ loop.index0 }}">{{ ['A','B','C','D'][loop.index0] }}. {{ op }}</label>
+{% endfor %}
+</div>
+{% endfor %}
+<label class="confirm-line"><input type="checkbox" id="confirmBox">我已完成全部判读题，知道<b>提交后不能再修改</b></label>
+<button class="btn btn-primary" id="submitBtn" disabled>确认提交试卷</button>
+</div>
+
+{% else %}
+{# ───── 上传成品形式（原有） ───── #}
+{% if exam.quiz %}
+<div class="card">
+<h2>一、选择题（共 {{ exam.quiz|length }} 题，共 {{ exam.quiz_max }} 分）</h2>
+{% for item in exam.quiz %}
+<div class="qitem">
+<div class="qt"><b>{{ loop.index }}.</b>{{ item.q }}</div>
+{% for op in item.options %}
+<label class="opt"><input type="radio" name="q{{ loop.index0 }}" value="{{ loop.index0 }}">{{ ['A','B','C','D'][loop.index0] }}. {{ op }}</label>
+{% endfor %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+<h2>{% if exam.quiz %}二、{% endif %}上传根管X光片（{{ exam.skill_max if exam.quiz_max else 100 }} 分）</h2>
+<div class="banner info">📸 可上传 <b>1–2 张</b>（如正位＋偏位投照），系统取最高分；<br>
+请上传<b>清晰、对比度足够、根管完整在画面内</b>的X光片。</div>
+<div class="upload-zone" id="uploadZone"><div class="icon">🩻</div>
+<div class="text">点击选择 / 拖入根管X光片</div>
+<div class="hint">JPG/PNG，最多2张</div>
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
+<div class="preview-grid" id="previewGrid"></div>
+
+<label class="confirm-line"><input type="checkbox" id="confirmBox">我已检查答案和X光片，知道<b>提交后不能再修改</b></label>
+<button class="btn btn-primary" id="submitBtn" disabled>确认提交试卷</button>
+</div>
+{% endif %}
+{% endif %}
+
+<a href="/" class="back-link">← 返回首页</a>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-box"><div class="spinner"></div>
+<p style="font-size:15px;color:#1B3A5C;font-weight:600">正在提交试卷…</p></div></div>
+
+<script src="/static/identity.js?v=20260915"></script>
+{% if state == 'open' %}
+<script>
+const IS_READING = {{ 'true' if exam.kind == 'xray_read' else 'false' }};
+const MAX_IMG = 2;
+let selectedFiles = [];
+const submitBtn=document.getElementById('submitBtn'),
+      confirmBox=document.getElementById('confirmBox'),
+      loadingOverlay=document.getElementById('loadingOverlay');
+
+function allChecked(prefix, count){
+  for(let i=0;i<count;i++){
+    if(!document.querySelector('input[name="'+prefix+i+'"]:checked')) return false;
+  }
+  return true;
+}
+
+if(IS_READING){
+  const readingCount = {{ exam.questions|length }};
+  function refresh(){submitBtn.disabled=!(confirmBox.checked&&allChecked('r',readingCount));}
+  document.addEventListener('change',e=>{if(e.target.name&&e.target.name.startsWith('r'))refresh();});
+  confirmBox.addEventListener('change',refresh);
+}else{
+  const uploadZone=document.getElementById('uploadZone'),fileInput=document.getElementById('fileInput'),
+        previewGrid=document.getElementById('previewGrid');
+  const quizCount = {{ exam.quiz|length if exam.quiz else 0 }};
+  function refresh(){submitBtn.disabled=!(confirmBox.checked&&selectedFiles.length>0&&allChecked('q',quizCount));}
+  document.addEventListener('change',e=>{if(e.target.name&&e.target.name.startsWith('q'))refresh();});
+  confirmBox.addEventListener('change',refresh);
+  uploadZone.addEventListener('click',()=>fileInput.click());
+  ['dragover','dragleave','drop'].forEach(ev=>uploadZone.addEventListener(ev,e=>{
+    e.preventDefault();if(ev==='drop')handleFiles(e.dataTransfer.files);
+  }));
+  fileInput.addEventListener('change',e=>handleFiles(e.target.files));
+  function handleFiles(files){
+    for(const f of files){
+      if(!f.type.startsWith('image/')||selectedFiles.length>=MAX_IMG)continue;
+      selectedFiles.push(f);
+      const r=new FileReader();
+      r.onload=e=>{
+        const d=document.createElement('div');d.className='preview-item';
+        d.innerHTML='<img src="'+e.target.result+'"><button class="remove">&times;</button>';
+        d.querySelector('.remove').onclick=()=>{selectedFiles=selectedFiles.filter(x=>x!==f);d.remove();refresh();};
+        previewGrid.appendChild(d);
+      };
+      r.readAsDataURL(f);
+    }
+    fileInput.value='';setTimeout(refresh,50);
+  }
+}
+
+submitBtn.addEventListener('click',async()=>{
+  if(!confirm('最后确认：提交后不能修改、看不到分数。确定提交吗？'))return;
+  loadingOverlay.classList.add('show');
+  const fd=new FormData();
+  if(IS_READING){
+    const n={{ exam.questions|length }};
+    for(let i=0;i<n;i++)fd.append('r'+i,document.querySelector('input[name="r'+i+'"]:checked').value);
+  }else{
+    const n={{ exam.quiz|length if exam.quiz else 0 }};
+    for(let i=0;i<n;i++)fd.append('q'+i,document.querySelector('input[name="q'+i+'"]:checked').value);
+    selectedFiles.forEach(f=>fd.append('photos',f));
+  }
+  try{
+    const resp=await fetch('{{ request.path }}/submit',{method:'POST',body:fd});
+    const txt=await resp.text();let data;
+    try{data=JSON.parse(txt)}catch(_){alert('服务器异常（HTTP '+resp.status+'），请立刻找老师，不要离开。');return}
+    if(!resp.ok||data.error){alert(data.error||'提交失败，请重试或联系老师。');return}
+    location.reload();
+  }catch(err){
+    alert('网络异常：请确认网络后重试，或立刻联系老师。（'+err.message+'）');
+  }finally{
+    loadingOverlay.classList.remove('show');
+  }
+});
+</script>
+{% endif %}
+</body></html>
