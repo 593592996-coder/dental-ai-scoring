@@ -98,10 +98,11 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 <div class="card">
 <h2>判读题（共 {{ exam.questions|length }} 题，每题 {{ (100/exam.questions|length)|round(1) }} 分）</h2>
 {% for item in exam.questions %}
+{% set qidx = loop.index0 %}
 <div class="qitem">
 <div class="qt"><b>{{ loop.index }}.</b>{{ item.q }}</div>
 {% for op in item.options %}
-<label class="opt"><input type="radio" name="r{{ loop.index0 }}" value="{{ loop.index0 }}">{{ ['A','B','C','D'][loop.index0] }}. {{ op }}</label>
+<label class="opt"><input type="radio" name="r{{ qidx }}" value="{{ loop.index0 }}">{{ ['A','B','C','D'][loop.index0] }}. {{ op }}</label>
 {% endfor %}
 </div>
 {% endfor %}
