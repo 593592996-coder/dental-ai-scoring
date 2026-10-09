@@ -197,7 +197,7 @@ def collect():
                      t.get('class') or roster.get(sid, {}).get('class', ''))
         if t.get('final') is not None:
             row['modules']['thinking'] = {'best': t['final'], 'latest': t['final'],
-                                          'report_id': None, 'ts': '',
+                                          'report_id': None, 'ts': '', 'all': [],
                                           'sub': {'history': t['history'], 'analysis': t['analysis'],
                                                   'reasoning': t['reasoning']}}
         row['thinking_detail'] = {'history': t['history'], 'analysis': t['analysis'],
@@ -206,7 +206,8 @@ def collect():
     # 各板块每次成绩按提交时间排序（文件按会话ID遍历，时间未必有序）
     for row in rows.values():
         for m in row['modules'].values():
-            m['all'].sort(key=lambda x: x['ts'])
+            if m.get('all'):
+                m['all'].sort(key=lambda x: x['ts'])
 
     # 3) 补齐花名册信息
     for sid, st in roster.items():
