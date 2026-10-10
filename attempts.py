@@ -19,7 +19,14 @@ def _safe(sid):
 
 
 def record(sid, name, klass, kind, case_id=None, **payload):
-    """追加一条作答事件。"""
+    """追加一条作答事件。日志用途，任何写入异常都不得阻断主流程（如登录/评分）。"""
+    try:
+        _record(sid, name, klass, kind, case_id, **payload)
+    except Exception:
+        pass
+
+
+def _record(sid, name, klass, kind, case_id=None, **payload):
     if not sid:
         return
     path = os.path.join(ATT_DIR, _safe(sid) + '.json')
