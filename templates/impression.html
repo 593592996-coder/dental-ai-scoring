@@ -24,6 +24,9 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 .slot .x{position:absolute;top:8px;right:10px;color:#c0392b;font-size:20px;display:none;font-weight:700;background:#fff;border-radius:50%;width:24px;height:24px;line-height:22px}
 .slot.filled .x{display:block}
 .slot input{display:none}
+.btnrow{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.up-btn{display:inline-flex;align-items:center;gap:4px;padding:9px 20px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;border:1.5px solid #0F766E;background:#0F766E;color:#fff;user-select:none;-webkit-tap-highlight-color:transparent}
+.up-btn.alt{background:#fff;color:#0F766E}
 .btn{padding:12px 32px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
 .btn-primary{background:linear-gradient(135deg,#0F766E,#14B8A6);color:#fff;width:100%}
 .btn-primary:disabled{background:#ccc;cursor:not-allowed}
@@ -76,13 +79,15 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 <div class="jaw-grid" id="jawGrid">
   <div class="slot" id="slot-upper">
     <span class="x">&times;</span>
-    <div class="ph"><div class="bigicon">🔺</div><div class="lab">① 上颌印模</div><div class="sub">点按拍照 / 上传<br>腭部居中、牙弓完整入镜</div></div>
-    <input type="file" accept="image/*" capture="environment"><img style="display:none">
+    <div class="ph"><div class="bigicon">🔺</div><div class="lab">① 上颌印模</div><div class="sub">腭部居中、牙弓完整入镜</div></div>
+    <div class="btnrow"><label class="up-btn" for="cam-upper">📷 拍照</label><label class="up-btn alt" for="alb-upper">🖼 相册</label></div>
+    <input type="file" id="cam-upper" class="cam" accept="image/*" capture="environment"><input type="file" id="alb-upper" class="alb" accept="image/*"><img style="display:none">
   </div>
   <div class="slot" id="slot-lower">
     <span class="x">&times;</span>
-    <div class="ph"><div class="bigicon">🔻</div><div class="lab">② 下颌印模</div><div class="sub">点按拍照 / 上传<br>舌侧开口朝上、牙弓完整入镜</div></div>
-    <input type="file" accept="image/*" capture="environment"><img style="display:none">
+    <div class="ph"><div class="bigicon">🔻</div><div class="lab">② 下颌印模</div><div class="sub">舌侧开口朝上、牙弓完整入镜</div></div>
+    <div class="btnrow"><label class="up-btn" for="cam-lower">📷 拍照</label><label class="up-btn alt" for="alb-lower">🖼 相册</label></div>
+    <input type="file" id="cam-lower" class="cam" accept="image/*" capture="environment"><input type="file" id="alb-lower" class="alb" accept="image/*"><img style="display:none">
   </div>
 </div>
 <div style="margin-top:16px"><button class="btn btn-primary" id="analyzeBtn" disabled>🔍 开始AI分析（至少上传一张）</button></div>
@@ -103,11 +108,12 @@ const files={};
 const analyzeBtn=document.getElementById('analyzeBtn');
 document.querySelectorAll('.slot').forEach(el=>{
  const jaw=el.id.replace('slot-','');
- const inp=el.querySelector('input'),img=el.querySelector('img'),ph=el.querySelector('.ph');
- el.addEventListener('click',e=>{if(e.target.classList.contains('x'))return;inp.click();});
- inp.addEventListener('change',()=>{const f=inp.files[0];if(!f)return;files[jaw]=f;
-   const rd=new FileReader();rd.onload=ev=>{img.src=ev.target.result;img.style.display='block';ph.style.display='none';el.classList.add('filled');refreshBtn();};rd.readAsDataURL(f);});
- el.querySelector('.x').addEventListener('click',e=>{e.stopPropagation();delete files[jaw];inp.value='';img.style.display='none';ph.style.display='flex';el.classList.remove('filled');refreshBtn();});
+ const inp=el.querySelector('input.cam'),alb=el.querySelector('input.alb'),img=el.querySelector('img'),ph=el.querySelector('.ph');
+ el.addEventListener('click',e=>{if(el.classList.contains('filled')||e.target.closest('label')||e.target.classList.contains('x'))return;alb.click();});
+ const onPick=()=>{const f=inp.files[0]||alb.files[0];if(!f)return;files[jaw]=f;
+   const rd=new FileReader();rd.onload=ev=>{img.src=ev.target.result;img.style.display='block';ph.style.display='none';el.classList.add('filled');refreshBtn();};rd.readAsDataURL(f);inp.value='';alb.value='';};
+ inp.addEventListener('change',onPick);alb.addEventListener('change',onPick);
+ el.querySelector('.x').addEventListener('click',e=>{e.stopPropagation();delete files[jaw];inp.value='';alb.value='';img.style.display='none';ph.style.display='flex';el.classList.remove('filled');refreshBtn();});
 });
 function refreshBtn(){analyzeBtn.disabled=Object.keys(files).length===0;}
 analyzeBtn.addEventListener('click',async()=>{
