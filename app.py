@@ -6,6 +6,7 @@ II类洞AI评分系统 — Flask Web应用
 
 import os
 import json
+import re
 import time
 import uuid
 from datetime import datetime
@@ -54,6 +55,37 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 REPORT_FOLDER.mkdir(exist_ok=True)
 
+# ---- 子路径反向代理支持（腾讯云 nginx 挂 /score/ 时自动改写响应内绝对路径）----
+@app.after_request
+def _apply_forwarded_prefix(resp):
+    pfx = request.headers.get('X-Forwarded-Prefix', '').rstrip('/')
+    if not pfx:
+        return resp
+    ct = (resp.content_type or '')
+    if 'text/html' in ct:
+        try:
+            body = resp.get_data(as_text=True)
+        except RuntimeError:
+            body = None
+        if body is not None:
+            body = re.sub(r'((?:href|src|action)\s*=\s*["\'])/', r'\g<1>' + pfx + '/', body)
+            body = re.sub(r'((?:fetch|window\.open|location\.replace)\s*\(\s*["\'])/', r'\g<1>' + pfx + '/', body)
+            body = re.sub(r'(location\.href\s*=\s*["\'])/', r'\g<1>' + pfx + '/', body)
+            resp.set_data(body)
+    elif 'application/json' in ct:
+        try:
+            body = resp.get_data(as_text=True)
+        except RuntimeError:
+            body = None
+        if body is not None:
+            for seg in ('/report/', '/uploads/', '/static/'):
+                body = body.replace('"' + seg, '"' + pfx + seg)
+            resp.set_data(body)
+    loc = resp.headers.get('Location')
+    if loc and loc.startswith('/') and not loc.startswith(pfx + '/'):
+        resp.headers['Location'] = pfx + loc
+    return resp
+
 # 临床思维训练板块（独立蓝图，挂 /train、/admin，不影响评分流程）
 try:
     from training import train_bp
@@ -76,21 +108,46 @@ except Exception as _e:
 
 def _current_student():
     """统一登录身份（由思维训练的 /train/api/identify 写入 session）。
-    返回 {'sid','name','class'}；未登录 sid 为空，由各接口回退到手填表单。"""
+    返回 {'sid','name','class','org','role'}；未登录 sid 为空，由各接口回退到手填表单。"""
     sid = session.get('student_number') or ''
     if not sid:
-        return {'sid': '', 'name': '', 'class': ''}
+        return {'sid': '', 'name': '', 'class': '', 'org': '', 'role': ''}
     return {'sid': sid, 'name': session.get('student_name', ''),
-            'class': session.get('student_class', '')}
+            'class': session.get('student_class', ''),
+            'org': session.get('student_org', ''),
+            'role': session.get('student_role', '')}
 
 
 def _identity_from_form_or_session(form):
-    """评分接口取身份：已登录用 session（权威），否则回退表单。返回 (sid,name,class)。"""
+    """评分接口取身份：已登录用 session（权威），否则回退表单。
+    返回 (sid,name,class,org,role)。"""
     me = _current_student()
     if me['sid']:
-        return me['sid'], me['name'], me['class']
+        return me['sid'], me['name'], me['class'], me['org'], me['role']
     return ('', form.get('student_name', '匿名').strip() or '匿名',
-            form.get('student_class', '未知班级').strip() or '未知班级')
+            form.get('student_class', '未知班级').strip() or '未知班级',
+            form.get('student_org', '').strip(), form.get('student_role', '').strip())
+
+
+# 已登录但被禁用：拦截评分与考试提交
+_BANNED_POST = ('/analyze', '/analyze_endo', '/analyze_xray',
+                '/analyze_crown_ant', '/analyze_crown_post', '/analyze_impression')
+
+@app.before_request
+def _block_banned_scoring():
+    if request.method != 'POST':
+        return None
+    blocked = request.path in _BANNED_POST or \
+        (request.path.startswith('/exam/') and request.path.endswith('/submit'))
+    if not blocked:
+        return None
+    sid = session.get('student_number')
+    import bans
+    binfo = bans.info(sid) if sid else None
+    if binfo:
+        why = f'（{binfo["reason"]}）' if binfo.get('reason') else ''
+        return jsonify({'error': f'账号已被停用{why}，提交被拒绝'}), 403
+    return None
 
 # 全局评分历史（简化版，生产环境应使用数据库）
 scoring_history = []
@@ -758,7 +815,8 @@ def analyze():
         return jsonify({'error': '未上传照片'}), 400
 
     files = request.files.getlist('photos')
-    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
+    student_number, student_name, student_class, student_org, student_role = \
+        _identity_from_form_or_session(request.form)
     tooth_type = request.form.get('tooth_type', 'real')
     operation_time = request.form.get('operation_time', None)
 
@@ -813,6 +871,8 @@ def analyze():
         'student_number': student_number,
         'student_name': student_name,
         'student_class': student_class,
+        'student_org': student_org,
+        'student_role': student_role,
         'total_score': round(best_report.total_score, 1),
         'max_total': best_report.max_total,
         'percentage': round(best_report.total_score / best_report.max_total * 100, 1),
@@ -881,14 +941,14 @@ def export_excel():
     header_font_white = Font(name='微软雅黑', size=11, bold=True, color='FFFFFF')
 
     # Title
-    ws1.merge_cells('A1:P1')
+    ws1.merge_cells('A1:Q1')
     ws1.cell(row=1, column=1, value='II类洞制备AI评分汇总表').font = title_font
     ws1.cell(row=1, column=1).alignment = center
 
     # Headers
     headers = ['序号', '学生姓名', '班级', '总分', '等级', '外形轮廓(20)', '鸠尾峡(15)', '洞深(10)',
                '髓壁平面度(8)', '侧壁垂直度(7)', '点线角锐度(10)', '邻面盒形(10)', '洞缘光滑度(5)',
-               '邻牙保护(10)', '操作过程(5)', '分析时间']
+               '邻牙保护(10)', '操作过程(5)', '分析时间', '机构']
 
     for col, h in enumerate(headers, 1):
         cell = ws1.cell(row=2, column=col, value=h)
@@ -926,8 +986,10 @@ def export_excel():
 
         ws1.cell(row=row, column=16, value=d.get('timestamp', '')).font = cell_font
         ws1.cell(row=row, column=16).alignment = center
+        ws1.cell(row=row, column=17, value=d.get('student_org', '')).font = cell_font
+        ws1.cell(row=row, column=17).alignment = center
 
-        for col in range(1, 17):
+        for col in range(1, 18):
             ws1.cell(row=row, column=col).border = thin_border
 
         # 等级着色
@@ -947,7 +1009,7 @@ def export_excel():
     pass_count = sum(1 for s in scores if s >= 60)
     ws1.cell(row=stat_row, column=5, value=f'及格率: {pass_count/len(scores)*100:.1f}%' if scores else 'N/A').font = Font(name='微软雅黑', size=11, bold=True)
     ws1.cell(row=stat_row, column=5).alignment = center
-    for col in range(1, 17):
+    for col in range(1, 18):
         ws1.cell(row=stat_row, column=col).border = thin_border
 
     # ── Sheet 2: 详细报告 ──
@@ -988,6 +1050,7 @@ def export_excel():
     ws1.column_dimensions['C'].width = 14
     for col in range(4, 17):
         ws1.column_dimensions[chr(64+col)].width = 13
+    ws1.column_dimensions['Q'].width = 18
 
     # 保存到内存
     output = BytesIO()
@@ -1269,7 +1332,16 @@ def analyze_endo():
     reports = _safe_reports(endo_engine.analyze, saved_paths)
     if not reports:
         return jsonify({'error': '未能从照片中识别出开髓洞形。请按要求拍摄（①颌面正位 ②洞底插K锉），在光线充足、对焦清晰处重拍后再上传。'}), 422
-    best = max(reports, key=lambda r: r.total_score)
+
+    def _roof_judgeable(rep):
+        """插锉照/看不清的照片判不了髓室顶（老师规则），不能拿它的 60% 保底去压过正位照的真实分。"""
+        for d in rep.dimensions:
+            if '髓室顶' in d.name:
+                return d.detail != '未能判定'
+        return False
+
+    judgeable = [r for r in reports if _roof_judgeable(r)]
+    best = max(judgeable or reports, key=lambda r: r.total_score)
     dims = [{'name': d.name, 'score': d.score, 'max_score': d.max_score,
              'percentage': round(d.score/d.max_score*100,1) if d.max_score>0 else 0,
              'detail': d.detail, 'status': d.status,
@@ -1279,6 +1351,7 @@ def analyze_endo():
     result = {'session_id': session_id,
               'student_number': _me['sid'], 'student_name': _me['name'] or '匿名',
               'student_class': _me['class'] or '未知班级',
+              'student_org': _me['org'], 'student_role': _me['role'],
               'total_score': round(best.total_score,1),
               'max_total': best.max_total, 'dimensions': dims,
               'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
@@ -1323,6 +1396,7 @@ def analyze_xray():
     result = {'session_id': session_id,
               'student_number': _me['sid'], 'student_name': _me['name'] or '匿名',
               'student_class': _me['class'] or '未知班级',
+              'student_org': _me['org'], 'student_role': _me['role'],
               'total_score': round(best.total_score,1),
               'max_total': best.max_total, 'dimensions': dims,
               'grade': ('优秀' if best.total_score>=90 else '良好' if best.total_score>=80 else
@@ -1448,7 +1522,8 @@ def _run_crown(engine, prefix, tooth, allowed_teeth):
     tooth = (tooth or '').strip()
     if tooth not in allowed_teeth:
         return jsonify({'error': f'牙位无效，仅支持 {"/".join(allowed_teeth)}'}), 400
-    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
+    student_number, student_name, student_class, student_org, student_role = \
+        _identity_from_form_or_session(request.form)
 
     session_id = uuid.uuid4().hex[:8]
     photos = {}
@@ -1480,6 +1555,7 @@ def _run_crown(engine, prefix, tooth, allowed_teeth):
     result = {
         'session_id': session_id, 'student_number': student_number,
         'student_name': student_name, 'student_class': student_class,
+        'student_org': student_org, 'student_role': student_role,
         'tooth': tooth, 'module_title': '前牙全瓷冠预备' if prefix == 'crown_ant' else '后牙全瓷冠预备',
         'total_score': ts, 'max_total': 100, 'percentage': round(ts, 1),
         'equipment_score': best.equipment_score,
@@ -1526,7 +1602,8 @@ def _save_one(f, prefix, session_id, jaw):
 @app.route('/analyze_impression', methods=['POST'])
 def analyze_impression():
     """藻酸盐印模制取 AI分析：上颌+下颌各1张。"""
-    student_number, student_name, student_class = _identity_from_form_or_session(request.form)
+    student_number, student_name, student_class, student_org, student_role = \
+        _identity_from_form_or_session(request.form)
     session_id = uuid.uuid4().hex[:8]
 
     up_path = _save_one(request.files.get('upper'), 'impression', session_id, 'upper')
@@ -1571,6 +1648,7 @@ def analyze_impression():
     result = {
         'session_id': session_id, 'student_number': student_number,
         'student_name': student_name, 'student_class': student_class,
+        'student_org': student_org, 'student_role': student_role,
         'module_title': '藻酸盐印模制取',
         'total_score': ts, 'max_total': 100, 'percentage': round(ts, 1),
         'grade': ('优秀' if ts >= 90 else '良好' if ts >= 80 else

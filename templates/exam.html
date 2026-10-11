@@ -133,7 +133,7 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 <div class="upload-zone" id="uploadZone"><div class="icon">🩻</div>
 <div class="text">点击选择 / 拖入根管X光片</div>
 <div class="hint">JPG/PNG，最多2张</div>
-<input type="file" id="fileInput" accept="image/*" multiple style="display:none"></div>
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none"><input type="file" id="camInput" accept="image/*" capture="environment" style="display:none"><div style="display:flex;gap:10px;justify-content:center;margin-top:12px"><button type="button" id="btnCam" style="padding:10px 24px;border:none;border-radius:10px;background:linear-gradient(135deg,#e67e22,#d35400);color:#fff;font-size:14px;font-weight:600;cursor:pointer">📷 拍照</button><button type="button" id="btnAlb" style="padding:10px 24px;border:none;border-radius:10px;background:linear-gradient(135deg,#64748b,#94a3b8);color:#fff;font-size:14px;font-weight:600;cursor:pointer">🖼 相册</button></div></div>
 <div class="preview-grid" id="previewGrid"></div>
 
 <label class="confirm-line"><input type="checkbox" id="confirmBox">我已检查答案和X光片，知道<b>提交后不能再修改</b></label>
@@ -182,6 +182,10 @@ if(IS_READING){
     e.preventDefault();if(ev==='drop')handleFiles(e.dataTransfer.files);
   }));
   fileInput.addEventListener('change',e=>handleFiles(e.target.files));
+  const camInput=document.getElementById('camInput');
+  document.getElementById('btnCam').addEventListener('click',e=>{e.stopPropagation();camInput.click()});
+  document.getElementById('btnAlb').addEventListener('click',e=>{e.stopPropagation();fileInput.click()});
+  camInput.addEventListener('change',e=>handleFiles(e.target.files));
   function handleFiles(files){
     for(const f of files){
       if(!f.type.startsWith('image/')||selectedFiles.length>=MAX_IMG)continue;
@@ -195,7 +199,7 @@ if(IS_READING){
       };
       r.readAsDataURL(f);
     }
-    fileInput.value='';setTimeout(refresh,50);
+    fileInput.value='';camInput.value='';setTimeout(refresh,50);
   }
 }
 

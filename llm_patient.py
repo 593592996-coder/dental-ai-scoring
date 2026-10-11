@@ -122,14 +122,17 @@ def _save_cache(cache):
         pass
 
 
-def _trace(case_id, q, answer, model, ok, note=''):
+def _trace(case_id, q, answer, model, ok, note='', usage=None):
     try:
         os.makedirs(_LOG_DIR, exist_ok=True)
+        rec = {'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+               'case_id': case_id, 'q': q, 'a': answer,
+               'model': model, 'ok': ok, 'note': note}
+        if usage:                  # token 数，供用量看板估算花费；老记录无此字段
+            rec['in_tokens'] = usage.get('prompt_tokens')
+            rec['out_tokens'] = usage.get('completion_tokens')
         with open(_TRACE_PATH, 'a', encoding='utf-8') as f:
-            f.write(json.dumps({'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'case_id': case_id, 'q': q, 'a': answer,
-                                'model': model, 'ok': ok, 'note': note},
-                               ensure_ascii=False) + '\n')
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     except Exception:
         pass
 
@@ -170,15 +173,16 @@ def answer(case_id, case_data, q, recent=None):
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode('utf-8'))
         reply = data['choices'][0]['message']['content'].strip()
+        usage = data.get('usage') or {}
         if not reply:
-            _trace(case_id, q, '', cfg['model'], False, '空回答')
+            _trace(case_id, q, '', cfg['model'], False, '空回答', usage)
             return None
         cache[key] = reply
         if len(cache) > 2000:
             cache = dict(list(cache.items())[-2000:])
         _save_cache(cache)
         _cb_record(True)
-        _trace(case_id, q, reply, cfg['model'], True, f'{time.time()-t0:.1f}s')
+        _trace(case_id, q, reply, cfg['model'], True, f'{time.time()-t0:.1f}s', usage)
         return reply
     except urllib.error.HTTPError as e:
         _cb_record(False)

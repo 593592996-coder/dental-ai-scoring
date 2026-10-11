@@ -22,6 +22,17 @@ admin_password.txt
 llm_config.json
 consult_logs/llm_cache.json
 
+# 视觉大模型密钥（火山方舟 ARK；云端用 ARK_API_KEY 环境变量注入，勿提交）
+vision_config.json
+vision_logs/
+
 # 考试模式：考卷与锁分成绩（隐私，不入库）
 exam_data/
 backup_*/
+
+# 迁移PythonAnywhere的历史数据（含学生原始照片+姓名班级成绩，勿入库）
+migration_pa/
+migration_temp/
+
+# 账号禁用名单（运行态数据，勿入库）
+banned.json

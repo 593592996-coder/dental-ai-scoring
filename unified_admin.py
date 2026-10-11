@@ -83,12 +83,19 @@ def home():
     return render_template('admin_unified.html')
 
 
+import bans
+
 # ───────── 数据 API ─────────
 @bp.route('/admin/api/overview')
 def overview():
     klass = request.args.get('class', '').strip()
     rows, unmatched, junk = class_rows(klass)
-    submitted = [r for r in rows if r['done_modules']]
+    # 标注禁用状态（成绩保留）
+    for r in rows:
+        bi = bans.info(r['sid'])
+        r['banned'] = bool(bi)
+        r['ban_reason'] = bi['reason'] if bi else ''
+    submitted = [r for r in rows if r['done_modules'] and not r['banned']]
 
     def avg(key):
         vs = [r[key] for r in submitted if r.get(key) is not None]
@@ -145,6 +152,29 @@ def student(sid):
     except Exception:
         pass
     return jsonify(out)
+
+
+@bp.route('/admin/api/ban', methods=['POST'])
+def api_ban():
+    """禁用账号（非本机构/未实名等）；成绩保留。"""
+    d = request.get_json() or {}
+    sid = (d.get('sid') or '').strip()
+    reason = (d.get('reason') or '').strip()
+    if not sid:
+        return jsonify({'error': '缺少账号'}), 400
+    if not bans.ban(sid, reason):
+        return jsonify({'error': '账号无效'}), 400
+    return jsonify({'ok': True})
+
+
+@bp.route('/admin/api/unban', methods=['POST'])
+def api_unban():
+    """恢复已禁用账号。"""
+    d = request.get_json() or {}
+    sid = (d.get('sid') or '').strip()
+    if not bans.unban(sid):
+        return jsonify({'error': '该账号不在禁用名单'}), 400
+    return jsonify({'ok': True})
 
 
 # ───────── 导出 ─────────
@@ -205,7 +235,7 @@ def export_full():
     rows, unmatched, _ = class_rows(klass)
 
     wb = Workbook(); ws = wb.active; ws.title = '成绩总表'
-    hdr = ['学号', '姓名', '班级'] + [MODULE_NAME[k] for k in include] + [f'综合成绩（{len(include)}板块均分）', '已完成板块数']
+    hdr = ['学号', '姓名', '班级', '机构', '身份', '状态'] + [MODULE_NAME[k] for k in include] + [f'综合成绩（{len(include)}板块均分）', '已完成板块数']
     ws.append(hdr)
     hf = Font(color='FFFFFF', bold=True); fill = PatternFill('solid', fgColor='1B3A5C')
     thin = Side(style='thin', color='BBBBBB'); border = Border(thin, thin, thin, thin)
@@ -213,17 +243,20 @@ def export_full():
         c.font = hf; c.fill = fill; c.alignment = Alignment(horizontal='center'); c.border = border
     for r in rows:
         comp, have, _ = composite(r, include)
-        ws.append([r['sid'], r['name'], r.get('class', '')] +
+        status = '已禁用' if bans.info(r['sid']) else ''
+        ws.append([r['sid'], r['name'], r.get('class', ''),
+                   r.get('org', ''), r.get('role', ''), status] +
                   [r.get(k) if r.get(k) is not None else '' for k in include] +
                   [comp if comp is not None else '', have])
     # 未匹配（无学号历史成绩）单列一页
     ws2 = wb.create_sheet('待核对(无学号历史)')
-    ws2.append(['姓名', '班级', '板块', '分数', '报告ID', '时间'])
+    ws2.append(['姓名', '班级', '机构', '板块', '分数', '报告ID', '时间'])
     for u in unmatched:
         if klass and u.get('class') != klass:
             continue
-        ws2.append([u['name'], u['class'], u['module_name'], u['score'], u['report_id'], u['ts']])
-    for i, w in enumerate([18, 12, 22] + [12] * len(include) + [18, 10], 1):
+        ws2.append([u['name'], u['class'], u.get('org', ''), u['module_name'],
+                    u['score'], u['report_id'], u['ts']])
+    for i, w in enumerate([18, 12, 22, 20, 10, 9] + [12] * len(include) + [18, 10], 1):
         ws.column_dimensions[chr(64 + i) if i <= 26 else 'A' + chr(64 + i - 26)].width = w
     ws.freeze_panes = 'A2'
 
@@ -251,31 +284,31 @@ def practice_progress_export():
     prog = gb.practice_progress(module, min_submit)
 
     wb = Workbook(); ws = wb.active; ws.title = '第一次vs最后一次'
-    ws.append(['学号', '姓名', '班级', '提交次数', '第一次', '最后一次', '最高分', '提升值'])
+    ws.append(['学号', '姓名', '班级', '机构', '提交次数', '第一次', '最后一次', '最高分', '提升值'])
     hf = Font(color='FFFFFF', bold=True); fillp = PatternFill('solid', fgColor='1B3A5C')
     for c in ws[1]:
         c.font = hf; c.fill = fillp; c.alignment = Alignment(horizontal='center')
     gains = []
     for p in prog:
-        ws.append([p['sid'], p['name'], p['class'], p['n'],
+        ws.append([p['sid'], p['name'], p['class'], p.get('org', ''), p['n'],
                    p['first'], p['last'], p['best'], p['gain']])
         gains.append(p['gain'])
     if gains:
         ws.append([])
         ws.append(['达标人数', len(prog), '', '', '', '平均提升', round(sum(gains)/len(gains), 2)])
-    for i, w in enumerate([20, 12, 22, 9, 9, 9, 9, 9], 1):
+    for i, w in enumerate([20, 12, 22, 20, 9, 9, 9, 9, 9], 1):
         ws.column_dimensions[chr(64 + i)].width = w
     ws.freeze_panes = 'A2'
 
     ws2 = wb.create_sheet('每次完整成绩')
     max_n = max((p['n'] for p in prog), default=0)
-    ws2.append(['学号', '姓名', '班级'] + [f'第{i}次' for i in range(1, max_n + 1)])
+    ws2.append(['学号', '姓名', '班级', '机构'] + [f'第{i}次' for i in range(1, max_n + 1)])
     for c in ws2[1]:
         c.font = hf; c.fill = fillp; c.alignment = Alignment(horizontal='center')
     for p in prog:
-        ws2.append([p['sid'], p['name'], p['class']] +
+        ws2.append([p['sid'], p['name'], p['class'], p.get('org', '')] +
                    [p['scores'][i] if i < len(p['scores']) else '' for i in range(max_n)])
-    for i, w in enumerate([20, 12, 22] + [8] * max_n, 1):
+    for i, w in enumerate([20, 12, 22, 20] + [8] * max_n, 1):
         ws2.column_dimensions[chr(64 + i) if i <= 26 else 'A' + chr(64 + i - 26)].width = w
     ws2.freeze_panes = 'D2'
 
@@ -293,3 +326,18 @@ def download():
     if not f or not os.path.exists(path):
         abort(404)
     return send_file(path, as_attachment=True)
+
+
+# ───────── 大模型用量 ─────────
+@bp.route('/admin/llm')
+def llm_page():
+    return render_template('admin_llm.html')
+
+
+@bp.route('/admin/api/llm_usage')
+def llm_usage_api():
+    import llm_usage
+    out = {'stats': llm_usage.stats()}
+    if request.args.get('balance') == '1':   # 余额是外部请求，按需查，避免每次开页都等
+        out['balance'] = llm_usage.balance()
+    return jsonify(out)

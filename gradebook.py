@@ -123,7 +123,8 @@ def _thinking_scores():
                 tot += val * w; wsum += w
         final = round(tot / wsum) if wsum else None
         out[sid] = {'history': h, 'analysis': a, 'reasoning': r, 'final': final,
-                    'name': d.get('name', ''), 'class': d.get('class', '')}
+                    'name': d.get('name', ''), 'class': d.get('class', ''),
+                    'org': d.get('org', ''), 'role': d.get('role', '')}
     return out
 
 
@@ -138,13 +139,17 @@ def collect():
     unmatched = []
     junk = 0
 
-    def ensure(sid, name='', klass=''):
+    def ensure(sid, name='', klass='', org='', role=''):
         row = rows.setdefault(sid, {'sid': sid, 'name': name, 'class': klass,
-                                    'modules': {}})
+                                    'org': org, 'role': role, 'modules': {}})
         if not row['name'] and name:
             row['name'] = name
         if not row['class'] and klass:
             row['class'] = klass
+        if not row['org'] and org:
+            row['org'] = org
+        if not row['role'] and role:
+            row['role'] = role
         return row
 
     # 1) 操作评分报告
@@ -160,6 +165,7 @@ def collect():
         score = round(float(score), 1)
         sid = _norm(d.get('student_number'))
         name, klass = _norm(d.get('student_name')), _norm(d.get('student_class'))
+        org, role = _norm(d.get('student_org')), _norm(d.get('student_role'))
         ts = d.get('timestamp', '')
 
         if not sid:
@@ -175,12 +181,12 @@ def collect():
                 how = '姓名唯一自动匹配'
             if not sid:
                 unmatched.append({'name': name, 'class': klass, 'canon_class': canon,
-                                  'module': mod, 'module_name': MODULE_NAME[mod],
+                                  'org': org, 'module': mod, 'module_name': MODULE_NAME[mod],
                                   'score': score, 'report_id': rep_id, 'ts': ts})
                 continue
             klass = canon
         row = ensure(sid, name or roster.get(sid, {}).get('name', ''),
-                     klass or roster.get(sid, {}).get('class', ''))
+                     klass or roster.get(sid, {}).get('class', ''), org, role)
         m = row['modules'].setdefault(mod, {'best': None, 'latest': None,
                                             'report_id': None, 'ts': '', 'all': []})
         m['all'].append({'ts': ts, 'score': score, 'report_id': rep_id})
@@ -194,7 +200,8 @@ def collect():
         if sid == 'abc123' or _is_junk(t.get('name')):
             continue
         row = ensure(sid, t.get('name') or roster.get(sid, {}).get('name', ''),
-                     t.get('class') or roster.get(sid, {}).get('class', ''))
+                     t.get('class') or roster.get(sid, {}).get('class', ''),
+                     t.get('org', ''), t.get('role', ''))
         if t.get('final') is not None:
             row['modules']['thinking'] = {'best': t['final'], 'latest': t['final'],
                                           'report_id': None, 'ts': '', 'all': [],
@@ -230,6 +237,7 @@ def practice_progress(module, min_submit=3):
             continue
         first, last = scores[0], scores[-1]
         out.append({'sid': sid, 'name': r['name'], 'class': r.get('class', ''),
+                    'org': r.get('org', ''), 'role': r.get('role', ''),
                     'n': len(scores), 'scores': scores,
                     'first': first, 'best': max(scores), 'last': last,
                     'gain': round(last - first, 1)})
@@ -244,6 +252,7 @@ def class_rows(klass=''):
         if klass and r.get('class') != klass:
             continue
         rec = {'sid': sid, 'name': r['name'], 'class': r.get('class', ''),
+               'org': r.get('org', ''), 'role': r.get('role', ''),
                'in_roster': r.get('in_roster', False)}
         for key, _ in MODULES:
             m = r['modules'].get(key)

@@ -66,6 +66,7 @@
         <span class="small">/ {{ report.max_total }} · {{ report.grade }}</span>
     </div>
     <p class="meta"><strong>{{ report.student_name }}</strong> · {{ report.student_class }}
+        {% if report.student_org %} · {{ report.student_org }}{% endif %}
         {% if report.tooth %} · 牙位 <strong>{{ report.tooth }}</strong>{% endif %}
         · 共分析 {{ report.photo_count }} 张照片</p>
     {% if report.equipment_score is defined and report.equipment_score %}

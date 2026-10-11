@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>大模型用量 · 教师后台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',sans-serif;background:#fff;color:#222;padding:14px}
+h3{font-size:14px;color:#1B3A5C;margin-bottom:10px;border-left:4px solid #1f5f8b;padding-left:8px}
+.panel{background:#f7f9fc;border-radius:12px;padding:14px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.kpi{background:#fff;border-radius:10px;padding:11px 13px;border:1px solid #e9eef5}
+.kpi .v{font-size:22px;font-weight:800;color:#1B3A5C}
+.kpi .l{font-size:11.5px;color:#8892a0;margin-top:2px}
+.bal{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.bal .money{font-size:34px;font-weight:800;color:#1e8449}
+.bal .money.low{color:#c0392b}
+.bal .unit{font-size:15px;font-weight:700;color:#5a6b7b;margin-left:3px}
+.btn{padding:8px 14px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,#2B7BEC,#1B3A5C);font-family:inherit}
+.btn:disabled{opacity:.55;cursor:default}
+.muted{color:#99a3ad;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 6px;border-bottom:1px solid #eef1f5;text-align:center}
+th{background:#1B3A5C;color:#fff}
+td.l,th.l{text-align:left}
+.bars{display:flex;align-items:flex-end;gap:4px;height:130px;padding-top:6px}
+.bars .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px}
+.bars .bar{width:100%;background:linear-gradient(180deg,#2B7BEC,#1B3A5C);border-radius:4px 4px 0 0;min-height:2px}
+.bars .bar.zero{background:#e3e9f0}
+.bars .dn{font-size:9.5px;color:#99a3ad;white-space:nowrap;transform:scale(.85)}
+.bars .bn{font-size:10px;color:#5a6b7b;font-weight:700}
+.note{font-size:12px;color:#7a8699;line-height:1.7;background:#fff;border-radius:8px;padding:9px 11px;margin-top:8px}
+.warn{color:#e67e22}
+.off{background:#fdecea;color:#c0392b;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;margin-bottom:12px}
+</style></head>
+<body>
+
+<div id="offbox" class="off" style="display:none"></div>
+
+<div class="panel">
+  <h3>💰 DeepSeek 账户余额（实时）</h3>
+  <div class="bal">
+    <div><span class="money" id="balNum">—</span><span class="unit" id="balUnit">元</span></div>
+    <button class="btn" id="balBtn" onclick="loadBalance()">刷新余额</button>
+    <span class="muted" id="balTip">首次打开不会自动查；点刷新查最新余额</span>
+  </div>
+  <div class="note" id="balNote" style="display:none"></div>
+</div>
+
+<div class="panel">
+  <h3>📊 调用台账（本地留痕）</h3>
+  <div class="kpis" id="kpis"></div>
+  <div class="note" id="rateNote"></div>
+</div>
+
+<div class="panel">
+  <h3>📅 近 14 天调用</h3>
+  <div class="bars" id="bars"></div>
+</div>
+
+<div class="panel">
+  <h3>🦷 按病例分布</h3>
+  <table id="caseTbl"><thead><tr><th class="l">病例</th><th>调用次数</th><th>占比</th></tr></thead><tbody></tbody></table>
+</div>
+
+<script>
+const f=(...a)=>fetch(...a).then(r=>{if(r.status===401)location.href='/admin/login';return r;});
+
+function fmt(n){return n==null?'—':n.toLocaleString();}
+
+async function loadStats(){
+  const d=await (await f('/admin/api/llm_usage')).json();
+  const s=d.stats; if(!s.ok){document.getElementById('offbox').style.display='block';
+    document.getElementById('offbox').textContent='读取失败：'+(s.error||'未知');return;}
+  if(!s.enabled){document.getElementById('offbox').style.display='block';
+    document.getElementById('offbox').textContent='⚠️ 大模型当前未启用（llm_config.json 的 enabled 或 api_key 缺失），学生端会退回规则回答。';}
+
+  document.getElementById('kpis').innerHTML=[
+    ['总调用',fmt(s.total)],['今日',fmt(s.today_n)],['近7天',fmt(s.week_n)],
+    ['成功率',s.success_rate==null?'—':s.success_rate+'%'],
+    ['平均耗时',s.avg_lat==null?'—':s.avg_lat+' s'],
+    ['失败',fmt(s.fail_n)],['缓存条目',fmt(s.cache_n)],
+  ].map(([l,v])=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+
+  // token / 花费
+  const rn=document.getElementById('rateNote');
+  if(s.tracked_n){
+    rn.innerHTML=`已记 token 的调用 <b>${fmt(s.tracked_n)}</b> 次 · 输入 ${fmt(s.in_tokens)} tokens · 输出 ${fmt(s.out_tokens)} tokens<br>`+
+      `按费率 输入 ${s.price_in}元/百万 · 输出 ${s.price_out}元/百万 估算，累计约 <b>${s.est_cost} 元</b>。`+
+      `<span class="warn">（仅估算，以 DeepSeek 账单为准；费率可在 llm_config.json 改 price_in/price_out）</span>`;
+  }else{
+    rn.innerHTML='<span class="warn">历史记录里还没有 token 数据</span> —— 这次更新之后产生的调用才会带 token，届时此处自动出现花费估算。'+
+      '（旧调用只统计了次数与耗时）';
+  }
+
+  // 柱状图
+  const mx=Math.max(1,...s.days.map(x=>x.n));
+  document.getElementById('bars').innerHTML=s.days.map(x=>{
+    const h=Math.round(x.n/mx*100);
+    const dd=x.date.slice(5);
+    return `<div class="b"><div class="bn">${x.n||''}</div><div class="bar${x.n?'':' zero'}" style="height:${x.n?Math.max(h,4):2}%"></div><div class="dn">${dd}</div></div>`;
+  }).join('');
+
+  // 按病例
+  const tb=document.querySelector('#caseTbl tbody');
+  tb.innerHTML=s.by_case.length?s.by_case.map(x=>
+    `<tr><td class="l">${x.case}</td><td>${x.n}</td><td>${(x.n/s.total*100).toFixed(1)}%</td></tr>`).join('')
+    :'<tr><td colspan="3" class="muted">暂无数据</td></tr>';
+}
+
+async function loadBalance(){
+  const btn=document.getElementById('balBtn');
+  btn.disabled=true; btn.textContent='查询中…';
+  try{
+    const d=await (await f('/admin/api/llm_usage?balance=1')).json();
+    const b=d.balance;
+    if(b&&b.ok){
+      const num=document.getElementById('balNum');
+      num.textContent=b.total_balance.toFixed(2);
+      num.classList.toggle('low',b.total_balance<10);
+      document.getElementById('balUnit').textContent=b.currency;
+      document.getElementById('balTip').textContent='充值余额 '+b.topped_up.toFixed(2)+' · 赠送余额 '+b.granted.toFixed(2);
+      const n=document.getElementById('balNote');n.style.display='block';
+      n.textContent = b.total_balance<10
+        ? '⚠️ 余额不足 10 元，建议尽快充值，否则大模型兜底会失效（学生端自动退回规则回答，不影响上课）。'
+        : '余额正常。（DeepSeek 无自动扣款，用完即止）';
+    }else{
+      document.getElementById('balTip').textContent='查询失败：'+((b&&b.error)||'未知错误');
+    }
+  }catch(e){document.getElementById('balTip').textContent='网络异常';}
+  btn.disabled=false; btn.textContent='刷新余额';
+}
+
+loadStats();
+</script>
+</body></html>

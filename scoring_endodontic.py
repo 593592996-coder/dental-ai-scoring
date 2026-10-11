@@ -206,6 +206,71 @@ class 开髓术评分引擎:
     # 2. 髓室顶去净 (25分)
     # ═══════════════════════════════
     def score_roof_removal(self, image, contours):
+        """髓室顶去净 (25分)。
+        主判据 = 火山视觉大模型（见 vision_endo.py：纯 CV 在课堂杂背景照片上
+        92% 框错 ROI，且"越深越像揭顶"方向反了，小开口反而高分）。
+        判不了（照片无法辨认 / 调用失败）→ 按 60% 保底，不据此扣分。
+        """
+        max_s = 25
+        path = getattr(self, '_current_path', None)
+        vlm = None
+        if path:
+            try:
+                import vision_endo
+                vlm = vision_endo.judge_roof(path, runs=3)
+            except Exception:
+                vlm = None
+
+        if vlm is not None and not vlm.get('usable', True):
+            score = max_s * 0.6
+            process = (
+                '【髓室顶去净 — 25分】\n'
+                f'├─ {vlm.get("evidence") or "该照片不能用于判断髓室顶"}\n'
+                '└─ 按 60% 保底 → 15.0/25（不据此扣分）'
+            )
+            return self._make('髓室顶去净', score, max_s, 0.6, 1.0, '得分', '未能判定', 'warning',
+                              process=process,
+                              suggestion='本次提交的照片（插锉照/看不清）无法判断髓室顶状态。'
+                                         '请补拍一张「颌面正位、不插锉、牙冠合面正对镜头」的照片。')
+
+        if vlm is not None and vlm.get('tooth_visible') and vlm.get('score') is not None:
+            score = float(vlm['score'])
+            status = 'good' if score >= 20 else ('warning' if score >= 12 else 'bad')
+            ratio = vlm.get('ratio')
+            process = (
+                '【髓室顶去净 — 25分 · 视觉大模型判读】\n'
+                f'├─ 洞口面积 ÷ 牙冠面积 = {ratio if ratio is not None else "—"}（并发跑{vlm.get("runs", 3)}次取中位）\n'
+                f'├─ 判定: {vlm.get("roof_status")}\n'
+                f'├─ 依据: {vlm.get("evidence") or "—"}\n'
+                f'└─ → {score:.1f}/{max_s}'
+            )
+            if vlm.get('uncertain'):
+                process += '\n⚠️ 模型对本次判读把握不足，建议人工复核。'
+            if status == 'good':
+                sug = '髓室顶揭除到位，髓室底与根管口暴露良好。'
+            elif status == 'warning':
+                sug = ('髓室顶揭除不充分，仍有部分牙本质顶盖残留。'
+                       '用探针沿洞口边缘探查，球钻去除残留髓室顶，直至根管口完全直视。')
+            else:
+                sug = ('髓室顶基本未揭除，只开了穿入孔。'
+                       '需将洞口扩大至揭净髓室顶：球钻沿髓角方向扩展，去除全部顶盖后再修整洞形。')
+            return self._make('髓室顶去净', score, max_s, float(score) / max_s, 1.0, '得分',
+                              f'{score:.0f}/25', status, process=process, suggestion=sug)
+
+        # 判不了 → 60% 保底（不缺资料，也不据此扣分）
+        score = max_s * 0.6
+        why = '照片无法辨认（未拍到牙体/翻拍X光片/过糊）' if (vlm is not None) else '视觉模型未配置或调用失败'
+        process = (
+            '【髓室顶去净 — 25分】\n'
+            f'├─ {why}\n'
+            '└─ 按 60% 保底 → 15.0/25（不据此扣分）'
+        )
+        return self._make('髓室顶去净', score, max_s, 0.6, 1.0, '得分', '未能判定', 'warning',
+                          process=process,
+                          suggestion='本次照片无法辨认髓室顶状态，建议按拍照规范重拍（颌面正位、牙体占画面1/2以上）。')
+
+    def _score_roof_removal_cv_legacy(self, image, contours):
+        """旧的纯 CV 判据（保留备查，生产已不调用）。"""
         max_s = 25
         if not contours: return self._make('髓室顶去净', 0, max_s, 0, 1, '得分', '未检测', 'bad')
 
@@ -384,6 +449,8 @@ class 开髓术评分引擎:
 
         h, w = image.shape[:2]
         if max(h, w) > 600: scale = 600 / max(h, w); image = cv2.resize(image, (int(w*scale), int(h*scale)))
+
+        self._current_path = image_path   # 供「髓室顶去净」走视觉大模型（需要原图路径）
 
         self.calibration_scale = self.detect_scale(image)
         binary, contours = self.extract_region(image)

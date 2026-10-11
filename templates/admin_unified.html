@@ -26,6 +26,8 @@ td.l,th.l{text-align:left}tr.clickable{cursor:pointer}tr.clickable:hover{backgro
 tr.off{color:#b6bdc6}.s{font-weight:700}.s.hi{color:#27ae60}.s.mid{color:#e67e22}.s.lo{color:#c0392b}
 .dist{display:flex;height:22px;border-radius:6px;overflow:hidden;font-size:11px;color:#fff;font-weight:700}.dist div{display:flex;align-items:center;justify-content:center}
 .muted{color:#99a3ad;font-size:12px}
+.banbtn{display:inline-block;margin-top:3px;font-size:11.5px;color:#c0392b;cursor:pointer;text-decoration:underline}
+.banbtn.ban-on{color:#c0392b;font-weight:700}
 /* 弹层 */
 #mask{display:none;position:fixed;inset:0;background:rgba(20,40,70,.55);z-index:60;overflow:auto;padding:22px}#mask.show{display:block}
 .sheet{background:#f5f7fa;border-radius:16px;max-width:880px;margin:0 auto;padding:22px}
@@ -43,6 +45,7 @@ a.rl{font-size:11px;color:#2B7BEC}
 <div class="tabs">
   <button class="tab active" id="tabBtnGrades" onclick="switchTab('grades')">📈 成绩总览</button>
   <button class="tab" id="tabBtnExams" onclick="switchTab('exams')">📝 考试管理</button>
+  <button class="tab" id="tabBtnLlm" onclick="switchTab('llm')">🤖 大模型用量</button>
 </div>
 <div class="wrap">
  <div id="tabGrades">
@@ -67,6 +70,9 @@ a.rl{font-size:11px;color:#2B7BEC}
  <div id="tabExams" style="display:none">
   <iframe id="examsFrame" src="about:blank" style="width:100%;min-height:1400px;border:none;border-radius:12px;background:#fff"></iframe>
  </div>
+ <div id="tabLlm" style="display:none">
+  <iframe id="llmFrame" src="about:blank" style="width:100%;min-height:1100px;border:none;border-radius:12px;background:#fff"></iframe>
+ </div>
 </div>
 
 <div id="mask"><div class="sheet">
@@ -90,18 +96,21 @@ async function exportPractice(){
   }catch(e){tip.textContent='网络异常';}
 }
 
-// ── 标签页切换：成绩总览 / 考试管理（内嵌，不跳走）──
+// ── 标签页切换：成绩总览 / 考试管理 / 大模型用量（内嵌，不跳走）──
 function switchTab(which){
-  const g=document.getElementById('tabGrades'),e=document.getElementById('tabExams');
-  const bg=document.getElementById('tabBtnGrades'),be=document.getElementById('tabBtnExams');
+  const panes={grades:'tabGrades',exams:'tabExams',llm:'tabLlm'};
+  const btns={grades:'tabBtnGrades',exams:'tabBtnExams',llm:'tabBtnLlm'};
+  for(const k in panes){
+    document.getElementById(panes[k]).style.display=(k===which)?'block':'none';
+    document.getElementById(btns[k]).classList.toggle('active',k===which);
+  }
   if(which==='exams'){
-    g.style.display='none';e.style.display='block';
-    bg.classList.remove('active');be.classList.add('active');
     const f=document.getElementById('examsFrame');
     if(f.src.endsWith('about:blank')) f.src='/admin/exams?embedded=1';
-  }else{
-    e.style.display='none';g.style.display='block';
-    be.classList.remove('active');bg.classList.add('active');
+  }
+  if(which==='llm'){
+    const f=document.getElementById('llmFrame');
+    if(f.src.endsWith('about:blank')) f.src='/admin/llm';
   }
 }
 let D=null; const SCHOOL_COLS=['平时','期末','技能','月考1','月考2','月考3'];
@@ -117,20 +126,25 @@ async function load(){
     D.modules.map(m=>`<div class="kpi"><div class="v">${D.avg[m.key]==null?'—':D.avg[m.key]}</div><div class="l">${m.name}均分</div></div>`).join('');
   const colors={'优(≥85)':'#27ae60','中(60-84)':'#f39c12','待提高(<60)':'#c0392b','未完成':'#c7ced6'};
   document.getElementById('dist').innerHTML=Object.entries(D.dist).map(([k,v])=>v?`<div style="flex:${v};background:${colors[k]}" title="${k} ${v}人">${k} ${v}</div>`:'').join('');
-  const heads=['姓名','班级',...D.modules.map(m=>m.name),'综合(均分)'];
-  document.querySelector('#tbl thead').innerHTML='<tr>'+heads.map((h,i)=>`<th class="${i<2?'l':''}">${h}</th>`).join('')+'</tr>';
+  const heads=['姓名','班级','机构',...D.modules.map(m=>m.name),'综合(均分)'];
+  document.querySelector('#tbl thead').innerHTML='<tr>'+heads.map((h,i)=>`<th class="${i<3?'l':''}">${h}</th>`).join('')+'</tr>';
   document.querySelector('#tbl tbody').innerHTML=D.rows.map(r=>{
-    const sid=r.sid,name=r.name,cls=r['class']||'';
+    const sid=r.sid,name=r.name,cls=r['class']||'',org=r.org||'';
+    const banBtn=r.banned
+      ? `<a class="banbtn ban-on" onclick="event.stopPropagation();unbanStu('${sid}')">🚫 已禁用（点此恢复）</a>`
+      : `<a class="banbtn" onclick="event.stopPropagation();banStu('${sid}')">禁用</a>`;
+    const banTxt=r.banned&&r.ban_reason?`<br><span class="muted">原因：${r.ban_reason}</span>`:'';
+    const nameCell=`<td class="l"><b>${name}</b>${r.banned?' 🚫':''}<br><span class="muted">${sid}</span>${banTxt}<br>${banBtn}</td>`;
     const cells=D.modules.map(m=>`<td>${sc(r[m.key])}</td>`).join('');
     if(!r.done_modules.length)
-      return `<tr class="off"><td class="l"><b>${name}</b><br><span class="muted">${sid}</span></td><td class="l">${cls}</td>${cells}<td>—</td></tr>`;
-    return `<tr class="clickable" onclick="openStu('${sid}')"><td class="l"><b>${name}</b><br><span class="muted">${sid}</span></td><td class="l">${cls}</td>${cells}<td>${sc(r.composite)}</td></tr>`;
+      return `<tr class="off" ${r.banned?'style="background:#fdecea"':''}>${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}<td>—</td></tr>`;
+    return `<tr class="clickable" ${r.banned?'style="background:#fdecea"':''} onclick="openStu('${sid}')">${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}<td>${sc(r.composite)}</td></tr>`;
   }).join('');
   const u=D.unmatched||[];
   document.getElementById('unmatched').innerHTML = u.length
     ? `<div style="margin-bottom:6px;color:#c0392b">${u.length} 条历史成绩只有姓名/班级、无法唯一对应学号（重名或不在名册）：</div>
-       <table><thead><tr><th class="l">姓名</th><th class="l">班级</th><th>板块</th><th>分数</th><th>时间</th></tr></thead><tbody>`+
-      u.map(x=>`<tr><td class="l">${x.name}</td><td class="l">${x['class']||''}</td><td>${x.module_name}</td><td>${x.score}</td><td>${x.ts||''}</td></tr>`).join('')+`</tbody></table>
+       <table><thead><tr><th class="l">姓名</th><th class="l">班级</th><th class="l">机构</th><th>板块</th><th>分数</th><th>时间</th></tr></thead><tbody>`+
+      u.map(x=>`<tr><td class="l">${x.name}</td><td class="l">${x['class']||''}</td><td class="l">${x.org||''}</td><td>${x.module_name}</td><td>${x.score}</td><td>${x.ts||''}</td></tr>`).join('')+`</tbody></table>
        <div class="note">这些是统一登录上线前的老数据。处理方式：让相关学生用学号重新提交一次，或把真实 reports 发我做一对一人工并入。（已自动排除匿名/test 等测试数据 ${D.junk} 条）</div>`
     : `暂无待核对历史数据（已自动忽略测试数据 ${D.junk} 条）。`;
 }
@@ -186,6 +200,18 @@ function radar(summary, dimMeta){
   keys.forEach((k,i)=>{const[x,y]=pt(i,R);g+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e3e8ef"/>`;const[lx,ly]=pt(i,R+24);g+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#555">${dimMeta[k][0]}</text>`;});
   const poly=keys.map((k,i)=>pt(i,R*Math.max(0,dims[k]||0)/100).join(',')).join(' ');
   return `<svg width="280" height="280" viewBox="0 0 280 280">${g}<polygon points="${poly}" fill="rgba(43,123,236,.25)" stroke="#2B7BEC" stroke-width="2"/></svg>`;
+}
+async function banStu(sid){
+  const reason=prompt('禁用原因（可留空）：\n如：非本机构 / 未实名 / 信息不实','');
+  if(reason===null)return;
+  const r=await (await fetch('/admin/api/ban',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sid,reason})})).json();
+  if(r.ok)load();else alert(r.error||'操作失败');
+}
+async function unbanStu(sid){
+  const r=await (await fetch('/admin/api/unban',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sid})})).json();
+  if(r.ok)load();else alert(r.error||'操作失败');
 }
 async function openStu(sid){
   const d=await (await fetch('/admin/api/student/'+sid)).json();

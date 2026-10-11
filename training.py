@@ -19,17 +19,37 @@ from students import (load_roster, roster_exists, load_students, list_classes,
                       fill_workbook, blank_workbook, class_template_map,
                       roster_source_files, SCORE_COLS)
 import attempts
+import bans
 from case_photos import photos_for
 
 # 教师试用账号：只需在学号框输 abc123 即登录（无需姓名/密码）；成绩标记 teacher，不进学生总览/导出
 TEACHER_ACCOUNT = {'sid': 'abc123',
                    'name': '教师体验', 'class': '（教师体验，不计入学生成绩）'}
 
+# 手机号账号内部加此前缀，与学生学号防撞
+PHONE_PREFIX = 'T-'
+# 两所本院门诊：手机号登录时身份标“门诊员工”，其余机构一律“校外人员”
+INTERNAL_CLINICS = ('艾美口腔', '周朝美口腔')
+
 # 合并全部底牌：001/005/006（R1）+ 002/003/004（R2）+ 007~013（R3，自包含问诊/检查）
 REASONING = {}
 REASONING.update(R1); REASONING.update(R2); REASONING.update(R3)
 
 train_bp = Blueprint('training', __name__)
+
+# 已登录但被禁用的账号：拦截一切训练提交（登录/退出除外）
+@train_bp.before_app_request
+def _block_banned():
+    if request.method != 'POST' or not request.path.startswith('/train/api/'):
+        return None
+    if request.path in ('/train/api/identify', '/train/api/logout'):
+        return None
+    sid = session.get('student_number')
+    binfo = bans.info(sid) if sid else None
+    if binfo:
+        why = f'（{binfo["reason"]}）' if binfo.get('reason') else ''
+        return jsonify({'error': f'账号已被停用{why}，操作被拒绝'}), 403
+    return None
 
 SCORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scores')
 os.makedirs(SCORE_DIR, exist_ok=True)
@@ -59,48 +79,89 @@ def api_roster():
     return jsonify({'exists': roster_exists(), 'count': len(load_roster())})
 
 
+SCHOOL_ORG = '楚雄医药高等专科学校'
+
+
 @train_bp.route('/train/api/identify', methods=['POST'])
 def api_identify():
-    """进门登录：有花名册须“学号+姓名”与名册匹配；无花名册则手填姓名/学号/班级。"""
+    """进门登录：先选机构——
+    学校：学号+姓名（有花名册须与名册匹配）；门诊/校外：手机号+姓名自助登记。"""
     d = request.get_json() or {}
-    sid = (d.get('student_number') or '').strip()
+    # 兼容旧前端：没有 account 字段时取 student_number，按学号通道
+    account_type = d.get('account_type') or 'sid'
+    raw = (d.get('account') or d.get('student_number') or '').strip()
     name = (d.get('name') or '').strip()
     klass = (d.get('class_name') or '').strip()
+    org = (d.get('org') or '').strip()
 
-    # 教师试用账号：只需在“学号”框输 abc123，无需姓名、无需密码、不在名册中
-    if sid == TEACHER_ACCOUNT['sid']:
+    # 教师试用账号：只需输 abc123，无需姓名、无需密码、不在名册中
+    if raw == TEACHER_ACCOUNT['sid']:
         session['student_number'] = TEACHER_ACCOUNT['sid']
         session['student_name'] = TEACHER_ACCOUNT['name']
         session['student_class'] = TEACHER_ACCOUNT['class']
         session['student_sid'] = TEACHER_ACCOUNT['sid']
+        session['student_org'] = ''
+        session['student_role'] = ''
+        session['student_account'] = TEACHER_ACCOUNT['sid']
         session['is_teacher'] = True
         attempts.record(TEACHER_ACCOUNT['sid'], TEACHER_ACCOUNT['name'],
                         TEACHER_ACCOUNT['class'], 'login', teacher=True)
         return jsonify({'ok': True, 'name': TEACHER_ACCOUNT['name'],
                         'student_number': TEACHER_ACCOUNT['sid'],
-                        'class_name': TEACHER_ACCOUNT['class'], 'roster': True, 'teacher': True})
+                        'account': TEACHER_ACCOUNT['sid'],
+                        'class_name': TEACHER_ACCOUNT['class'], 'org': '', 'role': '',
+                        'roster': True, 'teacher': True})
 
-    roster = load_roster()
-    if roster:
-        if not sid or not name:
-            return jsonify({'ok': False, 'error': '请输入学号和姓名'}), 400
-        st = roster.get(sid)
-        if not st:
-            return jsonify({'ok': False, 'error': '学号不在花名册中，请核对后再输'}), 400
-        if st['name'].replace(' ', '') != name.replace(' ', ''):
-            return jsonify({'ok': False, 'error': '学号与姓名不匹配，请核对'}), 400
-        name, klass = st['name'], st['class']
+    if account_type == 'phone':
+        # 门诊员工 / 校外人员：手机号+姓名自助登记，无花名册、无审核
+        if not org:
+            return jsonify({'ok': False, 'error': '请选择或填写机构'}), 400
+        if not re.fullmatch(r'1\d{10}', raw):
+            return jsonify({'ok': False, 'error': '请输入正确的11位手机号'}), 400
+        if not name:
+            return jsonify({'ok': False, 'error': '请输入姓名'}), 400
+        sid = PHONE_PREFIX + raw
+        role = '门诊员工' if org in INTERNAL_CLINICS else '校外人员'
+        roster_on = False
     else:
-        if not name or not sid:
-            return jsonify({'ok': False, 'error': '请填齐姓名和学号'}), 400
+        # 在校学生：学号通道
+        roster = load_roster()
+        if roster:
+            if not raw or not name:
+                return jsonify({'ok': False, 'error': '请输入学号和姓名'}), 400
+            st = roster.get(raw)
+            if not st:
+                return jsonify({'ok': False, 'error': '学号不在花名册中，请核对后再输'}), 400
+            if st['name'].replace(' ', '') != name.replace(' ', ''):
+                return jsonify({'ok': False, 'error': '学号与姓名不匹配，请核对'}), 400
+            name, klass = st['name'], st['class']
+        else:
+            if not name or not raw:
+                return jsonify({'ok': False, 'error': '请填齐姓名和学号'}), 400
+        sid = raw
+        org = org or SCHOOL_ORG
+        role = '学生'
+        roster_on = bool(roster)
+
+    # 已禁用账号：拒绝登录
+    binfo = bans.info(sid)
+    if binfo:
+        why = f'（{binfo["reason"]}）' if binfo.get('reason') else ''
+        return jsonify({'ok': False,
+                        'error': f'该账号已被停用{why}，如有疑问请联系老师'}), 403
+
     session['student_number'] = sid
     session['student_name'] = name
     session['student_class'] = klass
     session['student_sid'] = sid
+    session['student_org'] = org
+    session['student_role'] = role
+    session['student_account'] = raw
     session['is_teacher'] = False
-    attempts.record(sid, name, klass, 'login')
-    return jsonify({'ok': True, 'name': name, 'student_number': sid, 'class_name': klass,
-                    'roster': bool(roster)})
+    attempts.record(sid, name, klass, 'login', org=org, role=role)
+    return jsonify({'ok': True, 'name': name, 'student_number': sid, 'account': raw,
+                    'class_name': klass, 'org': org, 'role': role,
+                    'roster': roster_on})
 
 
 @train_bp.route('/train/api/me')
@@ -110,12 +171,16 @@ def api_me():
     return jsonify({'identified': True, 'roster': roster_exists(),
                     'name': session.get('student_name'),
                     'student_number': session.get('student_number'),
-                    'class_name': session.get('student_class')})
+                    'account': session.get('student_account') or session.get('student_number'),
+                    'class_name': session.get('student_class'),
+                    'org': session.get('student_org', ''),
+                    'role': session.get('student_role', '')})
 
 
 @train_bp.route('/train/api/logout', methods=['POST'])
 def api_logout():
-    for k in ('student_number', 'student_name', 'student_class', 'student_sid'):
+    for k in ('student_number', 'student_name', 'student_class', 'student_sid',
+              'student_org', 'student_role', 'student_account'):
         session.pop(k, None)
     return jsonify({'ok': True})
 
@@ -664,6 +729,8 @@ def _save_score(case_id, section, score):
     rec['sections'].setdefault(section, {})[case_id] = score
     rec['name'] = session.get('student_name', rec.get('name', ''))
     rec['class'] = session.get('student_class', rec.get('class', ''))
+    rec['org'] = session.get('student_org', rec.get('org', ''))
+    rec['role'] = session.get('student_role', rec.get('role', ''))
     rec['student_number'] = sid
     rec['updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(path, 'w', encoding='utf-8') as f:
@@ -717,6 +784,7 @@ def _all_grade_records():
                     tot += val * WEIGHTS[key]; wsum += WEIGHTS[key]
             final = round(tot / wsum) if wsum else None
             recs[sid] = {'sid': sid, 'name': rec.get('name', ''), 'class': rec.get('class', ''),
+                         'org': rec.get('org', ''), 'role': rec.get('role', ''),
                          'history': h, 'analysis': an, 'reasoning': rs, 'final': final,
                          'updated': rec.get('updated', '')}
     return recs
