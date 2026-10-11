@@ -25,6 +25,9 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 .slot .x{position:absolute;top:4px;right:6px;color:#c0392b;font-size:16px;display:none;font-weight:700}
 .slot.filled .x{display:block}
 .slot input{display:none}
+.btnrow{display:flex;gap:6px;margin-top:6px}
+.up-btn{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:7px 6px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid #2B7BEC;background:#2B7BEC;color:#fff;user-select:none;-webkit-tap-highlight-color:transparent;white-space:nowrap}
+.up-btn.alb{background:#fff;color:#1B3A5C}
 .btn{padding:12px 32px;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
 .btn-primary{background:linear-gradient(135deg,#1B3A5C,#2B7BEC);color:#fff;width:100%}
 .btn-primary:disabled{background:#ccc;cursor:not-allowed}
@@ -105,14 +108,16 @@ const files={};
 const grid=document.getElementById('slotGrid'),analyzeBtn=document.getElementById('analyzeBtn');
 SLOTS.forEach(sl=>{
  const el=document.createElement('div');el.className='slot';el.id='slot-'+sl.k;
- el.innerHTML='<span class="x">&times;</span><span class="num">'+sl.n.slice(0,1)+'</span><div class="lab">'+sl.n.slice(1)+'</div><div class="sub">'+sl.s+'</div><input type="file" accept="image/*" capture="environment"><img style="display:none">';
- const inp=el.querySelector('input'),img=el.querySelector('img');
+ const cid='cam-'+sl.k,aid='alb-'+sl.k;
+ el.innerHTML='<span class="x">&times;</span><span class="num"></span><div class="lab"></div><div class="sub">'+sl.s+'</div><div class="btnrow"><label class="up-btn" for="'+cid+'">📷 拍照</label><label class="up-btn alb" for="'+aid+'">🖼 相册</label></div><input type="file" id="'+cid+'" class="cam" accept="image/*" capture="environment"><input type="file" id="'+aid+'" class="alb" accept="image/*"><img style="display:none">';
+ const inp=el.querySelector('input.cam'),alb=el.querySelector('input.alb'),img=el.querySelector('img');
  el.querySelector('.num').textContent=sl.n.charAt(0);
  el.querySelector('.lab').textContent=sl.n.slice(1);
- el.addEventListener('click',e=>{if(e.target.classList.contains('x'))return;inp.click();});
- inp.addEventListener('change',()=>{const f=inp.files[0];if(!f)return;files[sl.k]=f;
-   const rd=new FileReader();rd.onload=ev=>{img.src=ev.target.result;img.style.display='block';el.classList.add('filled');refreshBtn();};rd.readAsDataURL(f);});
- el.querySelector('.x').addEventListener('click',e=>{e.stopPropagation();delete files[sl.k];inp.value='';img.style.display='none';el.classList.remove('filled');refreshBtn();});
+ el.addEventListener('click',e=>{if(el.classList.contains('filled')||e.target.closest('label')||e.target.classList.contains('x'))return;alb.click();});
+ const onPick=()=>{const f=inp.files[0]||alb.files[0];if(!f)return;files[sl.k]=f;
+   const rd=new FileReader();rd.onload=ev=>{img.src=ev.target.result;img.style.display='block';el.classList.add('filled');refreshBtn();};rd.readAsDataURL(f);inp.value='';alb.value='';};
+ inp.addEventListener('change',onPick);alb.addEventListener('change',onPick);
+ el.querySelector('.x').addEventListener('click',e=>{e.stopPropagation();delete files[sl.k];inp.value='';alb.value='';img.style.display='none';el.classList.remove('filled');refreshBtn();});
  grid.appendChild(el);
 });
 function refreshBtn(){analyzeBtn.disabled=Object.keys(files).length===0;}
