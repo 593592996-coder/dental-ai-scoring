@@ -36,3 +36,6 @@ migration_temp/
 
 # 账号禁用名单（运行态数据，勿入库）
 banned.json
+
+# 飞书群机器人 webhook（含密钥，勿入库）
+feishu_webhook.txt
