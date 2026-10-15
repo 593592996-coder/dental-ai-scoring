@@ -25,13 +25,20 @@ _LOG_DIR = os.path.join(_BASE_DIR, 'consult_logs')
 _CACHE_PATH = os.path.join(_LOG_DIR, 'llm_cache.json')
 _TRACE_PATH = os.path.join(_LOG_DIR, 'llm_answers.jsonl')
 
-_TIMEOUT = 6          # 秒；大模型回答再慢也不能拖死课堂
+_TIMEOUT = 7          # 秒；大模型回答再慢也不能拖死课堂
 _CACHE_QMAX = 24      # 归一化问题取前若干字做缓存键
+
+# 2026-10-15 课堂实测：DeepSeek 端 503 抖动（当天 42 次调用挂 19 次）。
+# 503 是"瞬间回绝"（0.1~0.3s 就返回），重试一次成本极低、救回率可观；
+# 超时则不重试——重试只会把学生等待时间翻倍，得不偿失。
+_RETRY = 1            # 5xx 重试次数
+_RETRY_DELAY = 0.25   # 重试前的短暂等待（秒）
 
 # 熔断器：连续失败 _FAIL_LIMIT 次后，暂停调用 AI _COOLDOWN 秒（期间立即走规则兜底，
 # 学生不用干等超时），冷却后只试一次，成功则恢复。防止断网/欠费时全班卡顿。
+# 冷却 120→60s：服务端抽风往往持续几十秒，120s 太长，会让学生整节课都在吃兜底。
 _FAIL_LIMIT = 3
-_COOLDOWN = 120
+_COOLDOWN = 60
 _CB = {'fails': 0, 'open_until': 0.0}
 
 
@@ -164,31 +171,42 @@ def answer(case_id, case_data, q, recent=None):
     url = cfg['base_url'].rstrip('/') + '/chat/completions'
     body = json.dumps({'model': cfg['model'], 'messages': messages,
                        'temperature': 0.7, 'max_tokens': 120}).encode('utf-8')
-    req = urllib.request.Request(
-        url, data=body,
-        headers={'Content-Type': 'application/json',
-                 'Authorization': 'Bearer ' + cfg['api_key']})
-    try:
-        t0 = time.time()
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        reply = data['choices'][0]['message']['content'].strip()
-        usage = data.get('usage') or {}
-        if not reply:
-            _trace(case_id, q, '', cfg['model'], False, '空回答', usage)
-            return None
-        cache[key] = reply
-        if len(cache) > 2000:
-            cache = dict(list(cache.items())[-2000:])
-        _save_cache(cache)
-        _cb_record(True)
-        _trace(case_id, q, reply, cfg['model'], True, f'{time.time()-t0:.1f}s', usage)
-        return reply
-    except urllib.error.HTTPError as e:
-        _cb_record(False)
-        _trace(case_id, q, '', cfg['model'], False, f'HTTP {e.code}')
-        return None
-    except Exception as e:
-        _cb_record(False)
-        _trace(case_id, q, '', cfg['model'], False, type(e).__name__)
-        return None
+
+    t0 = time.time()
+    note = ''
+    for attempt in range(_RETRY + 1):
+        req = urllib.request.Request(
+            url, data=body,
+            headers={'Content-Type': 'application/json',
+                     'Authorization': 'Bearer ' + cfg['api_key']})
+        try:
+            with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            reply = data['choices'][0]['message']['content'].strip()
+            usage = data.get('usage') or {}
+            if not reply:
+                # 空回答不算连通性故障，不记熔断
+                _trace(case_id, q, '', cfg['model'], False, '空回答', usage)
+                return None
+            cache[key] = reply
+            if len(cache) > 2000:
+                cache = dict(list(cache.items())[-2000:])
+            _save_cache(cache)
+            _cb_record(True)
+            note = f'{time.time()-t0:.1f}s' + (f'(重试{attempt}次后成)' if attempt else '')
+            _trace(case_id, q, reply, cfg['model'], True, note, usage)
+            return reply
+        except urllib.error.HTTPError as e:
+            note = f'HTTP {e.code}'
+            # 5xx=服务端过载，通常一瞬就回绝，重试很便宜；4xx 是我们自己的问题，重试无意义
+            if e.code < 500 or attempt >= _RETRY:
+                break
+        except Exception as e:
+            note = type(e).__name__
+            break               # 超时不重试：重试只会把学生等待时间翻倍
+
+        time.sleep(_RETRY_DELAY)
+
+    _cb_record(False)
+    _trace(case_id, q, '', cfg['model'], False, note)
+    return None

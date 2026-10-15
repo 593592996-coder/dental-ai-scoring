@@ -343,7 +343,7 @@ def consult_chat():
     # 患者回答：统一匹配引擎（长词优先、单字兜底、防复读、兼容 / 分隔符）
     conv = c['conversation']
     hist_log = session.get('consult_history_log', [])
-    m = match_answer(student_input, conv, recent_answers=[x['patient'] for x in hist_log])
+    m = match_answer(student_input, conv, recent_answers=[x['patient'] for x in hist_log], case_data=c)
     if m:
         reply = m['answer']
         best_keywords = m['keywords']

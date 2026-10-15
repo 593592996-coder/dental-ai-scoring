@@ -15,6 +15,7 @@ from cases import CASES
 from reasoning_cases import REASONING as R1, WEIGHTS, in_scope_cases
 from reasoning_cases2 import REASONING2 as R2
 from reasoning_cases3 import REASONING3 as R3
+from history_kaoshi43 import REASONING_KS   # 执业医师病史采集 43 道（口内25/口外12/口修6）
 from students import (load_roster, roster_exists, load_students, list_classes,
                       fill_workbook, blank_workbook, class_template_map,
                       roster_source_files, SCORE_COLS)
@@ -26,14 +27,65 @@ from case_photos import photos_for
 TEACHER_ACCOUNT = {'sid': 'abc123',
                    'name': '教师体验', 'class': '（教师体验，不计入学生成绩）'}
 
+# 病例分析：每生每例最多提交几次（限次防「打分后回显答案→反复重交刷分」）；分数取历次最高
+ANALYSIS_MAX_TRIES = 3
+
 # 手机号账号内部加此前缀，与学生学号防撞
 PHONE_PREFIX = 'T-'
 # 两所本院门诊：手机号登录时身份标“门诊员工”，其余机构一律“校外人员”
 INTERNAL_CLINICS = ('艾美口腔', '周朝美口腔')
 
 # 合并全部底牌：001/005/006（R1）+ 002/003/004（R2）+ 007~013（R3，自包含问诊/检查）
+# + 病史采集 43 道（KS，只有板块1；case014-038 口内 / case201-212 口外 / case301-306 口修）
 REASONING = {}
 REASONING.update(R1); REASONING.update(R2); REASONING.update(R3)
+REASONING.update(REASONING_KS)
+# + 病例分析 56 道（analysis_cases_56：口内35 / 口外8 / 口修13，来自 56道病例分析.docx）
+try:
+    from analysis_cases_56 import ANALYSIS_CASES_56
+    REASONING.update(ANALYSIS_CASES_56)
+except Exception as _e:
+    print('⚠️ 56 道病例分析题库加载失败:', _e)
+
+# ═══════════════════ 科目分组（口内/口外/口修）═══════════════════
+# 三个板块的病例列表都按科目分组展示；科目顺序固定，空的科目在末尾以灰条提示。
+# 新增病例：在病例底牌里写 "subject": "口外"（优先），或在此映射表加一行即可。
+SUBJECT_ORDER = ['口内', '口外', '口修']   # 题库已撤（题全留）；将来要放备选题，加回 '题库' 即可
+CASE_SUBJECT = {
+    'case001': '口内', 'case002': '口内', 'case003': '口内', 'case004': '口内',
+    'case005': '口内', 'case006': '口内', 'case007': '口内', 'case008': '口内',
+    'case009': '口内', 'case010': '口内', 'case011': '口内', 'case012': '口内',
+    'case013': '口内',
+}
+
+
+def _subject_of(case_id, rc=None):
+    """科目：优先病例底牌自带的 subject，其次映射表，最后归入「未分类」。"""
+    return (rc or {}).get('subject') or CASE_SUBJECT.get(case_id) or '未分类'
+
+
+# 病例短标题（卡片标题栏用）：只说这题的主诉讲什么，不写诊断，便于扫读
+CASE_BRIEF = {
+    'case001': '左下后牙夜间痛',
+    'case002': '门牙摔断',
+    'case003': '牙龈反复鼓脓包',
+    'case004': '左下后牙跳痛 · 脸肿发热',
+    'case005': '后牙有洞 · 冷酸',
+    'case006': '多颗牙颈部酸痛',
+    'case007': '后牙有洞 · 冷热痛',
+    'case008': '后牙定点咬合痛',
+    'case009': '多颗牙表面发黄 · 敏感',
+    'case010': '半侧脸电击样剧痛',
+    'case011': '后牙磨平 · 敏感',
+    'case012': '牙缝胀痛 · 塞牙后',
+    'case013': '感冒后上后牙胀痛',
+}
+
+
+def _brief_of(case_id, rc=None):
+    """短标题：优先病例底牌自带的 brief，其次映射表，最后留空（前端回落到主诉）。"""
+    return (rc or {}).get('brief') or CASE_BRIEF.get(case_id) or ''
+
 
 train_bp = Blueprint('training', __name__)
 
@@ -205,6 +257,7 @@ def train_home():
         cases.append({
             'id': cid, 'title': rc.get('title', cid),
             'level': rc.get('level', 1), 'tag': rc.get('module_tag', ''),
+            'subject': _subject_of(cid, rc),
             'in_scope': rc.get('in_scope', True),
             'has_history': 'history_outline' in rc,
             'has_analysis': 'analysis' in rc,
@@ -215,10 +268,28 @@ def train_home():
 
 @train_bp.route('/train/api/cases')
 def train_cases():
-    return jsonify({cid: {'title': rc.get('title'),
+    # 科目内序号：按「科目 × 板块」分别编码——每个板块里各科目都从 1 开始，互不占号
+    # （病例分析的口外/口修不会被前面的病史采集题顶到 13、7 号）。
+    # 同一病例若跨板块（如 case001-013 既在采集又在分析），各板块序号独立。
+    no_map = {}
+    for _mod, _flag in (('history', 'history_outline'),
+                        ('analysis', 'analysis'),
+                        ('reasoning', 'reasoning')):
+        _cnt = {}
+        for cid in sorted(REASONING):
+            _rc = REASONING[cid]
+            if _flag not in _rc:
+                continue
+            _s = _subject_of(cid, _rc)
+            _cnt[_s] = _cnt.get(_s, 0) + 1
+            no_map.setdefault(cid, {})[_mod] = _cnt[_s]
+    # 脱敏：不下发 title / module_tag —— 它们含诊断名与病种，学生 F12 就能看到答案
+    return jsonify({cid: {'no': no_map.get(cid, {}),
+                          'brief': _brief_of(cid, rc),
                           'chief_complaint': _cc(cid),
                           'level': rc.get('level'),
-                          'tag': rc.get('module_tag'), 'in_scope': rc.get('in_scope', True),
+                          'subject': _subject_of(cid, rc),
+                          'in_scope': rc.get('in_scope', True),
                           'has_history': 'history_outline' in rc,
                           'has_analysis': 'analysis' in rc,
                           'has_reasoning': 'reasoning' in rc}
@@ -236,14 +307,14 @@ def history_start(case_id):
     session['train_mode'] = request.json.get('mode', 'practice') if request.is_json else 'practice'
     session['hist_log'] = []
     return jsonify({
-        'case_id': case_id, 'title': rc['title'], 'patient': b.get('patient', {}),
+        'case_id': case_id, 'patient': b.get('patient', {}),   # 脱敏：不下发 title
         'chief_complaint': b.get('chief_complaint', ''),
         'images': [{'label': i.get('label'), 'desc': i.get('desc')} for i in b.get('images', [])],
         'instruction': '根据主诉向患者提问，采集完整病史。问完后点「完成采集」评分。',
     })
 
 
-_FALLBACK_REPLY = '我……不太明白你问的是哪样，你换个问法嘛？'
+_FALLBACK_REPLY = '这个我一时说不清楚，医生你换个说法再问问嘛。'
 
 
 def _patient_reply(case_id, q, log):
@@ -251,7 +322,7 @@ def _patient_reply(case_id, q, log):
     返回 (reply, source)，source ∈ {'rule','section','ai','fallback'}。"""
     b = _base(case_id)
     recent = [x['patient'] for x in log]
-    m = match_answer(q, b.get('conversation', {}), recent_answers=recent)
+    m = match_answer(q, b.get('conversation', {}), recent_answers=recent, case_data=b)
     if m:
         return m['answer'], ('section' if m.get('fallback') else 'rule')
     history = [{'student': x['student'], 'patient': x['patient']} for x in log]
@@ -330,9 +401,10 @@ def _diag_match(name, acceptable, cn):
 
 def _judge_impression(rc, impression, diff_text=''):
     """板块1第二部分：学生列出≥2种「可能的疾病」并把最可能的排第一（不计入病史分）。"""
-    a = rc.get('analysis', {})
-    correct = a.get('diagnosis', '')
-    acceptable = [x for x in a.get('acceptable_diag', []) if x]
+    a = rc.get('analysis') or {}
+    # 无 analysis 的病例（病史采集 43 道）回退到顶层 diagnosis / acceptable_diag
+    correct = a.get('diagnosis') or rc.get('diagnosis', '')
+    acceptable = [x for x in (a.get('acceptable_diag') or rc.get('acceptable_diag') or []) if x]
     t = (impression or '').strip()
     cn = re.sub(r'[（(].*?[)）]', '', correct).replace(' ', '') if correct else ''
     cn = re.sub(r'\d+', '', cn)
@@ -436,10 +508,13 @@ def analysis_material(case_id):
     if not rc or 'analysis' not in rc:
         return jsonify({'error': '该病例暂无病例分析'}), 404
     a = rc['analysis']
+    used = _tries_used(_student_id(), 'analysis', case_id)
     return jsonify({
-        'case_id': case_id, 'title': rc['title'], 'tag': rc.get('module_tag', ''),
+        'case_id': case_id,   # 脱敏：不下发 title / tag（含诊断名与病种）
         'material': a['material'],
         'fields': ['diagnosis', 'basis', 'differential', 'treatment'],
+        'tries': {'used': used, 'max': ANALYSIS_MAX_TRIES,
+                  'left': max(0, ANALYSIS_MAX_TRIES - used)},
     })
 
 
@@ -448,6 +523,10 @@ def analysis_score(case_id):
     rc = _rc(case_id)
     if not rc or 'analysis' not in rc:
         return jsonify({'error': '病例不存在'}), 404
+    sid = _student_id()
+    used = _tries_used(sid, 'analysis', case_id)
+    # 前 3 次计分（取最高）；第 4 次起仍可继续练，但不再写成绩。教师号始终计分。
+    counted = used < ANALYSIS_MAX_TRIES or bool(session.get('is_teacher'))
     a = rc['analysis']
     d = request.get_json()
     diag = (d.get('diagnosis') or '').strip()
@@ -459,7 +538,7 @@ def analysis_score(case_id):
     correct_diag = a['diagnosis']
     if diag == correct_diag:
         diag_score = 30
-    elif any(acc in diag or diag in acc for acc in a.get('acceptable_diag', []) if acc):
+    elif diag and any(acc in diag or diag in acc for acc in a.get('acceptable_diag', []) if acc):
         diag_score = 24
     else:
         hit = sum(1 for acc in a.get('acceptable_diag', []) if acc and acc in diag)
@@ -500,13 +579,21 @@ def analysis_score(case_id):
                     'treatment_points': [x['text'] for x in a['treatment_points']],
                     'basis_points': [x['text'] for x in a['basis_points']]},
     }
-    _save_score(case_id, 'analysis', total)
-    attempts.record(_student_id(), session.get('student_name', ''), session.get('student_class', ''),
+    if counted:
+        _save_score(case_id, 'analysis', total, keep_max=True, count_try=True)
+        shown_used = used + 1
+    else:
+        shown_used = used          # 练习轮不写成绩、也不涨计数
+    # 本次是否计入成绩 + 该例剩余计分次数
+    result['counted'] = counted
+    result['tries'] = {'used': shown_used, 'max': ANALYSIS_MAX_TRIES,
+                       'left': max(0, ANALYSIS_MAX_TRIES - shown_used)}
+    attempts.record(sid, session.get('student_name', ''), session.get('student_class', ''),
                     'analysis_score', case_id, score=total, scores=result['scores'],
                     answers={'diagnosis': diag, 'basis': basis,
                              'differential': diff, 'treatment': treat},
                     basis_rows=basis_rows, diff_rows=diff_rows, treat_rows=treat_rows,
-                    correct_diagnosis=correct_diag,
+                    correct_diagnosis=correct_diag, counted=counted,
                     teacher=session.get('is_teacher', False))
     return jsonify(result)
 
@@ -531,7 +618,7 @@ def reasoning_start(case_id):
         if name in exam_items:
             exams.append({'name': name, 'purpose_options': None})
     return jsonify({
-        'case_id': case_id, 'title': rc['title'], 'patient': b.get('patient', {}),
+        'case_id': case_id, 'patient': b.get('patient', {}),   # 脱敏：不下发 title
         'chief_complaint': b.get('chief_complaint', ''),
         'images': [{'label': i.get('label'), 'desc': i.get('desc')} for i in b.get('images', [])],
         'exam_names': [e['name'] for e in exams],
@@ -717,7 +804,20 @@ def reasoning_review():
 def _score_file(sid):
     return os.path.join(SCORE_DIR, f'{sid}.json')
 
-def _save_score(case_id, section, score):
+def _tries_used(sid, section, case_id):
+    """该生该板块该例已提交次数（用于限次）。"""
+    path = _score_file(sid)
+    if not os.path.exists(path):
+        return 0
+    try:
+        with open(path, encoding='utf-8') as f:
+            rec = json.load(f)
+    except Exception:
+        return 0
+    return int(rec.get('tries', {}).get(section, {}).get(case_id, 0) or 0)
+
+
+def _save_score(case_id, section, score, keep_max=False, count_try=False):
     sid = _student_id()
     path = _score_file(sid)
     rec = {}
@@ -726,7 +826,14 @@ def _save_score(case_id, section, score):
             with open(path, encoding='utf-8') as f: rec = json.load(f)
         except: rec = {}
     rec.setdefault('sections', {})
-    rec['sections'].setdefault(section, {})[case_id] = score
+    sec = rec['sections'].setdefault(section, {})
+    if keep_max and isinstance(sec.get(case_id), (int, float)):
+        sec[case_id] = max(sec[case_id], score)     # 只升不降：保留历次最高分
+    else:
+        sec[case_id] = score
+    if count_try:                                    # 提交次数计数（限次用）
+        tr = rec.setdefault('tries', {}).setdefault(section, {})
+        tr[case_id] = int(tr.get(case_id, 0) or 0) + 1
     rec['name'] = session.get('student_name', rec.get('name', ''))
     rec['class'] = session.get('student_class', rec.get('class', ''))
     rec['org'] = session.get('student_org', rec.get('org', ''))
