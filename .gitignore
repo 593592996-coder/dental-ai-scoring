@@ -39,3 +39,6 @@ banned.json
 
 # 飞书群机器人 webhook（含密钥，勿入库）
 feishu_webhook.txt
+
+# 临时备份文件（不入库）
+*.bak_*

@@ -44,6 +44,7 @@ a.rl{font-size:11px;color:#2B7BEC}
 <span><a href="/">板块首页</a><a href="/train">临床思维训练</a><a href="/admin/logout">退出后台</a></span></div>
 <div class="tabs">
   <button class="tab active" id="tabBtnGrades" onclick="switchTab('grades')">📈 成绩总览</button>
+  <button class="tab" id="tabBtnBoard" onclick="switchTab('board')">🧭 学情看板</button>
   <button class="tab" id="tabBtnExams" onclick="switchTab('exams')">📝 考试管理</button>
   <button class="tab" id="tabBtnLlm" onclick="switchTab('llm')">🤖 大模型用量</button>
 </div>
@@ -67,6 +68,10 @@ a.rl{font-size:11px;color:#2B7BEC}
   <div class="panel"><h3>历史成绩待核对（老数据无学号，需人工确认）</h3><div id="unmatched" class="muted"></div></div>
  </div>{# ── /tabGrades ── #}
 
+ <div id="tabBoard" style="display:none">
+  <iframe id="boardFrame" src="about:blank" style="width:100%;height:900px;border:none;border-radius:12px;background:#eef2f7"></iframe>
+ </div>{# ── /tabBoard ── #}
+
  <div id="tabExams" style="display:none">
   <iframe id="examsFrame" src="about:blank" style="width:100%;min-height:1400px;border:none;border-radius:12px;background:#fff"></iframe>
  </div>
@@ -84,6 +89,14 @@ a.rl{font-size:11px;color:#2B7BEC}
 const _fetch=window.fetch;
 window.fetch=function(...a){return _fetch.apply(this,a).then(r=>{if(r.status===401)location.href='/admin/login';return r;});};
 
+// 学情看板 iframe 自适应高度（看板内容随班级/板块/科目变化）
+window.addEventListener('message',function(e){
+  const d=e.data;
+  if(!d||typeof d.boardHeight!=='number')return;
+  const f=document.getElementById('boardFrame');
+  if(f)f.style.height=Math.max(560,d.boardHeight+16)+'px';
+});
+
 // ── 练习成效导出（第一次 vs 最后一次，只含提交≥3次者）──
 async function exportPractice(){
   const module='xray', min=3;
@@ -98,11 +111,15 @@ async function exportPractice(){
 
 // ── 标签页切换：成绩总览 / 考试管理 / 大模型用量（内嵌，不跳走）──
 function switchTab(which){
-  const panes={grades:'tabGrades',exams:'tabExams',llm:'tabLlm'};
-  const btns={grades:'tabBtnGrades',exams:'tabBtnExams',llm:'tabBtnLlm'};
+  const panes={grades:'tabGrades',board:'tabBoard',exams:'tabExams',llm:'tabLlm'};
+  const btns={grades:'tabBtnGrades',board:'tabBtnBoard',exams:'tabBtnExams',llm:'tabBtnLlm'};
   for(const k in panes){
     document.getElementById(panes[k]).style.display=(k===which)?'block':'none';
     document.getElementById(btns[k]).classList.toggle('active',k===which);
+  }
+  if(which==='board'){
+    const f=document.getElementById('boardFrame');
+    if(f.src.endsWith('about:blank')) f.src='/admin/board?embedded=1';
   }
   if(which==='exams'){
     const f=document.getElementById('examsFrame');
@@ -126,7 +143,9 @@ async function load(){
     D.modules.map(m=>`<div class="kpi"><div class="v">${D.avg[m.key]==null?'—':D.avg[m.key]}</div><div class="l">${m.name}均分</div></div>`).join('');
   const colors={'优(≥85)':'#27ae60','中(60-84)':'#f39c12','待提高(<60)':'#c0392b','未完成':'#c7ced6'};
   document.getElementById('dist').innerHTML=Object.entries(D.dist).map(([k,v])=>v?`<div style="flex:${v};background:${colors[k]}" title="${k} ${v}人">${k} ${v}</div>`:'').join('');
-  const heads=['姓名','班级','机构',...D.modules.map(m=>m.name),'综合(均分)'];
+  const AS=(D.analysis_subjects||{}), AS_ORDER=AS.order||[], AS_TH=AS.thresholds||{};
+  const subHeads=AS_ORDER.map(s=>`病例分析·${s}<br><span class="muted" style="font-weight:400">门槛${AS_TH[s]??'—'}例</span>`);
+  const heads=['姓名','班级','机构',...D.modules.map(m=>m.name),...subHeads,'综合(均分)'];
   document.querySelector('#tbl thead').innerHTML='<tr>'+heads.map((h,i)=>`<th class="${i<3?'l':''}">${h}</th>`).join('')+'</tr>';
   document.querySelector('#tbl tbody').innerHTML=D.rows.map(r=>{
     const sid=r.sid,name=r.name,cls=r['class']||'',org=r.org||'';
@@ -136,9 +155,17 @@ async function load(){
     const banTxt=r.banned&&r.ban_reason?`<br><span class="muted">原因：${r.ban_reason}</span>`:'';
     const nameCell=`<td class="l"><b>${name}</b>${r.banned?' 🚫':''}<br><span class="muted">${sid}</span>${banTxt}<br>${banBtn}</td>`;
     const cells=D.modules.map(m=>`<td>${sc(r[m.key])}</td>`).join('');
+    const asub=r.analysis_subject||{};
+    const subCells=AS_ORDER.map(s=>{
+      const v=asub[s];
+      if(!v) return `<td class="muted">—</td>`;
+      const done=v.done, th=v.threshold, ok=done>=th;
+      return `<td><span class="s ${ok?'hi':'lo'}" title="均分${v.avg}，做满${th}例折算分才不砍">`+
+             `${done}/${th}</span><br><span class="muted">均${v.avg} · 折算<b style="color:${ok?'#27ae60':'#c0392b'}">${v.final}</b></span></td>`;
+    }).join('');
     if(!r.done_modules.length)
-      return `<tr class="off" ${r.banned?'style="background:#fdecea"':''}>${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}<td>—</td></tr>`;
-    return `<tr class="clickable" ${r.banned?'style="background:#fdecea"':''} onclick="openStu('${sid}')">${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}<td>${sc(r.composite)}</td></tr>`;
+      return `<tr class="off" ${r.banned?'style="background:#fdecea"':''}>${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}${subCells}<td>—</td></tr>`;
+    return `<tr class="clickable" ${r.banned?'style="background:#fdecea"':''} onclick="openStu('${sid}')">${nameCell}<td class="l">${cls}</td><td class="l">${org}</td>${cells}${subCells}<td>${sc(r.composite)}</td></tr>`;
   }).join('');
   const u=D.unmatched||[];
   document.getElementById('unmatched').innerHTML = u.length
@@ -220,6 +247,17 @@ async function openStu(sid){
   let h=`<div class="ev"><b>${s.name}</b>（${s.sid}）${s['class']?' · '+s['class']:''}</div>`;
   h+='<div class="ev"><b>各板块成绩（取最高）</b><div style="margin-top:6px">'+
     D.modules.map(m=>{const v=d.modules[m.key];return `<span style="display:inline-block;min-width:120px">${m.name}：${sc(v)}</span>`;}).join('')+'</div>';
+  const asub=d.analysis_subject||{}, aso=d.analysis_subject_order||[];
+  if(aso.some(s=>asub[s])){
+    h+='<div class="ev"><b>病例分析 · 按科目</b><div style="margin-top:6px">'+
+      aso.map(s=>{
+        const v=asub[s]; if(!v) return `<span style="display:inline-block;min-width:180px">${s}：<span class="muted">未做</span></span>`;
+        const ok=v.done>=v.threshold;
+        return `<span style="display:inline-block;min-width:180px">${s}：`
+          +`<span class="s ${ok?'hi':'lo'}">${v.done}/${v.threshold}例</span> `
+          +`均${v.avg} · 折算 <b style="color:${ok?'#27ae60':'#c0392b'}">${v.final}</b></span>`;
+      }).join('')+'</div><div class="muted" style="margin-top:4px">折算分＝均分×min(完成数÷门槛,1)，做够门槛才不砍</div></div>';
+  }
   const links=Object.entries(d.report_links||{});
   if(links.length)h+='<div style="margin-top:8px">操作评分报告：'+links.map(([n,u])=>`<a class="rl" target="_blank" href="${u}">${n}报告 ↗</a>`).join('　')+'</div>';
   h+='</div>';

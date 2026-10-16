@@ -35,12 +35,27 @@
     return fetch(url, opts).then(r => r.json());
   }
 
+  /* 三科室图标（static/js/subject_icons.js）。登录门被 9 个页面共用，
+     与其让每个页面都引一遍，不如这里按需加载；取不到就回落原来的 emoji。 */
+  function withIcons(cb) {
+    if (window.SUBJECT_ICONS) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = '/static/js/subject_icons.js';
+    s.onload = cb; s.onerror = cb;
+    document.head.appendChild(s);
+  }
+  function subjectLogoSvg() {
+    const ic = (window.SUBJECT_ICONS || {})['口内'];
+    if (!ic) return '🦷';
+    return '<svg viewBox="0 0 120 120" style="width:30px;height:30px;flex:none;color:#2E7D8A;--bd-ring:#CFE3E6">' + ic + '</svg>';
+  }
+
   function showForm(roster) {
     const mask = document.createElement('div');
     mask.id = 'idMask';
     mask.innerHTML = `
       <div id="idCard">
-        <h2>🦷 口腔临床训练</h2>
+        <h2 style="display:flex;align-items:center;justify-content:center;gap:8px"><span id="idLogo">🦷</span>口腔临床训练</h2>
         <p class="sub" id="idSub">在校学生请用<b>学号 + 姓名</b>登录，系统与班级名册核对</p>
         <label>所属机构</label>
         <select id="idOrg">${ORGS.map(o => `<option value="${o.v}">${o.t}</option>`).join('')}</select>
@@ -54,8 +69,16 @@
         </div>
         <div id="idErr"></div>
         <button id="idBtn">进 入</button>
+        <div style="text-align:center;margin-top:16px;padding-top:13px;border-top:1px solid #eef2f7">
+          <a href="/admin/login" style="font-size:12.5px;color:#9aa7b4;text-decoration:none">教师入口</a>
+        </div>
       </div>`;
     document.body.appendChild(mask);
+    // 图标加载完再替换成真图标（取不到就保留 emoji）
+    withIcons(() => {
+      const logo = mask.querySelector('#idLogo');
+      if (logo && window.SUBJECT_ICONS) logo.innerHTML = subjectLogoSvg();
+    });
     const $ = id => mask.querySelector(id);
     const orgEl = $('#idOrg'), orgNameEl = $('#idOrgName'), accountEl = $('#idAccount'),
           accountLabel = $('#idAccountLabel'), nameEl = $('#idName'), classEl = $('#idClass'),

@@ -269,6 +269,7 @@ def _call_once(image_path):
             t0 = time.time()
             with urllib.request.urlopen(req, timeout=int(cfg.get('timeout', 20))) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
+            _u = data.get('usage') or {}   # 留痕 token，供用量看板统计
             raw = data['choices'][0]['message'].get('content', '')
             parsed = _validate(_extract_json(raw))
             if parsed is None:
@@ -277,6 +278,7 @@ def _call_once(image_path):
                 continue
             _cb_record(True)
             _trace({'model': cfg['model'], 'sec': round(time.time() - t0, 1),
+                    'usage': _u,
                     'tooth_visible': parsed['tooth_visible'],
                     'roof_status': parsed['roof_status'],
                     'uncertain': parsed['uncertain']}, True)

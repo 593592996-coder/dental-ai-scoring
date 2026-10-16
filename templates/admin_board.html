@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>学情看板 · 教师后台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#eef2f7;color:#222}
+.header{background:linear-gradient(135deg,#16324f,#1f5f8b);color:#fff;padding:13px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.header h1{font-size:18px}
+.header a{color:#fff;font-size:12.5px;margin-left:14px;text-decoration:none;opacity:.9}
+.wrap{max-width:1180px;margin:16px auto;padding:0 16px}
+</style></head>
+<body>
+{% if not embedded %}
+<div class="header"><h1>🧭 学情看板</h1>
+<span><a href="/admin">← 返回成绩总后台</a><a href="/">板块首页</a><a href="/admin/logout">退出</a></span></div>
+{% endif %}
+<div class="wrap" {% if embedded %}style="padding:6px 4px"{% endif %}>
+  <div id="boardRoot"></div>
+</div>
+
+<script src="/static/js/subject_icons.js"></script>
+<script src="/static/vendor/html2canvas.min.js"></script>
+<script src="/static/vendor/html2pdf.bundle.min.js"></script>
+<script src="/static/js/board.js"></script>
+<script>
+BOARD.init({mode:'live'});
+
+/* 嵌在教师后台的 iframe 里时，把自身高度报给外层，避免固定高度留一大片空白 */
+(function () {
+  if (window.parent === window) return;
+  var last = 0;
+  function report() {
+    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    if (Math.abs(h - last) > 4) { last = h; window.parent.postMessage({ boardHeight: h }, '*'); }
+  }
+  if (window.ResizeObserver) new ResizeObserver(report).observe(document.body);
+  setInterval(report, 600);
+  report();
+})();
+</script>
+</body>
+</html>

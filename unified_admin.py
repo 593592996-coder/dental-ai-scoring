@@ -17,6 +17,7 @@ import gradebook
 from gradebook import MODULES, MODULE_NAME, SCORING_MODULES, collect, class_rows, composite
 import admin_data
 from students import list_classes, class_template_map, fill_workbook, SCORE_COLS
+import analysis_subjects
 
 bp = Blueprint('unified_admin', __name__)
 
@@ -121,6 +122,9 @@ def overview():
     return jsonify({
         'classes': list_classes(), 'class': klass,
         'modules': [{'key': k, 'name': n} for k, n in MODULES],
+        # 病例分析分科目：展示顺序 + 各科达标门槛（折算分＝均分×min(完成/门槛,1)）
+        'analysis_subjects': {'order': analysis_subjects.SUBJECT_ORDER,
+                              'thresholds': analysis_subjects.THRESHOLDS},
         'total': len(rows), 'submitted': len(submitted),
         'avg': {k: avg(k) for k, _ in MODULES},
         'dist': dist, 'rows': rows,
@@ -142,6 +146,9 @@ def student(sid):
     out = {'student': {k: rec[k] for k in ('sid', 'name', 'class')},
            'modules': {k: rec.get(k) for k, _ in MODULES},
            'report_links': links,
+           'analysis_subject': rec.get('analysis_subject') or {},
+           'analysis_subject_order': analysis_subjects.SUBJECT_ORDER,
+           'analysis_subject_thresholds': analysis_subjects.THRESHOLDS,
            'thinking_detail': rec.get('thinking_detail')}
     # 思维训练原始作答
     try:
@@ -234,8 +241,15 @@ def export_full():
         return jsonify({'error': '请勾选至少一个板块'}), 400
     rows, unmatched, _ = class_rows(klass)
 
+    # 病例分析按科目拆：完成数 / 均分 / 折算分（仅在勾选了「临床思维」时附带）
+    sub_cols = []
+    if 'thinking' in include:
+        for s in analysis_subjects.SUBJECT_ORDER:
+            sub_cols += [f'病例分析 {s}·完成数', f'病例分析 {s}·均分', f'病例分析 {s}·折算分']
+
     wb = Workbook(); ws = wb.active; ws.title = '成绩总表'
-    hdr = ['学号', '姓名', '班级', '机构', '身份', '状态'] + [MODULE_NAME[k] for k in include] + [f'综合成绩（{len(include)}板块均分）', '已完成板块数']
+    hdr = (['学号', '姓名', '班级', '机构', '身份', '状态'] + [MODULE_NAME[k] for k in include]
+           + sub_cols + [f'综合成绩（{len(include)}板块均分）', '已完成板块数'])
     ws.append(hdr)
     hf = Font(color='FFFFFF', bold=True); fill = PatternFill('solid', fgColor='1B3A5C')
     thin = Side(style='thin', color='BBBBBB'); border = Border(thin, thin, thin, thin)
@@ -244,9 +258,19 @@ def export_full():
     for r in rows:
         comp, have, _ = composite(r, include)
         status = '已禁用' if bans.info(r['sid']) else ''
+        sub_vals = []
+        if sub_cols:
+            asub = r.get('analysis_subject') or {}
+            for s in analysis_subjects.SUBJECT_ORDER:
+                v = asub.get(s)
+                if v:
+                    sub_vals += [v['done'], v['avg'], v['final']]
+                else:
+                    sub_vals += ['', '', '']
         ws.append([r['sid'], r['name'], r.get('class', ''),
                    r.get('org', ''), r.get('role', ''), status] +
                   [r.get(k) if r.get(k) is not None else '' for k in include] +
+                  sub_vals +
                   [comp if comp is not None else '', have])
     # 未匹配（无学号历史成绩）单列一页
     ws2 = wb.create_sheet('待核对(无学号历史)')
@@ -256,7 +280,7 @@ def export_full():
             continue
         ws2.append([u['name'], u['class'], u.get('org', ''), u['module_name'],
                     u['score'], u['report_id'], u['ts']])
-    for i, w in enumerate([18, 12, 22, 20, 10, 9] + [12] * len(include) + [18, 10], 1):
+    for i, w in enumerate([18, 12, 22, 20, 10, 9] + [12] * len(include) + [13] * len(sub_cols) + [18, 10], 1):
         ws.column_dimensions[chr(64 + i) if i <= 26 else 'A' + chr(64 + i - 26)].width = w
     ws.freeze_panes = 'A2'
 
@@ -326,6 +350,22 @@ def download():
     if not f or not os.path.exists(path):
         abort(404)
     return send_file(path, as_attachment=True)
+
+
+# ───────── 学情看板（病史采集 / 病例分析）─────────
+@bp.route('/admin/board')
+def board_page():
+    return render_template('admin_board.html',
+                           embedded=request.args.get('embedded') == '1')
+
+
+@bp.route('/admin/api/board')
+def board_api():
+    """学情看板数据：?class=<标准班名,空=全部>&section=history|analysis&subject=口内|口外|口修"""
+    import board_data
+    return jsonify(board_data.board(
+        request.args.get('class', ''), request.args.get('section', 'history'),
+        request.args.get('subject', '')))
 
 
 # ───────── 大模型用量 ─────────
