@@ -11,6 +11,7 @@ import re
 import json
 import glob
 from students import load_students, class_template_map, fill_workbook, SCORE_COLS
+import analysis_subjects
 
 _CN_NUM = {'一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6'}
 
@@ -34,6 +35,9 @@ SCORING_MODULES = [k for k, _ in MODULES if k != 'thinking']
 _PREFIX = {'endo_': 'endo', 'xray_': 'xray', 'crown_ant_': 'crown_ant',
            'crown_post_': 'crown_post', 'impression_': 'impression'}
 _JUNK_NAMES = {'匿名', '未知', 'test', 'testing', '测试', '测试学生', '冒烟', '123456', '同学', '学生'}
+
+# 非学生账号（教师体验等）：即便带学号也一律不进成绩册
+NON_STUDENT_SIDS = {'abc123'}
 
 
 def _norm(s):
@@ -116,13 +120,16 @@ def _thinking_scores():
             vals = [v for v in (x or {}).values() if isinstance(v, (int, float))]
             return round(sum(vals) / len(vals)) if vals else None
 
-        h, a, r = avg(secs.get('history')), avg(secs.get('analysis')), avg(secs.get('reasoning'))
+        # 病例分析 a = 正式折算分（均分×min(完成/门槛,1)，各科按门槛加权；2026-10-16 起计入总评）
+        h, a, r = avg(secs.get('history')), analysis_subjects.official_score(secs.get('analysis')), avg(secs.get('reasoning'))
         tot = wsum = 0
         for key, val, w in (('h', h, .3), ('a', a, .3), ('r', r, .4)):
             if val is not None:
                 tot += val * w; wsum += w
         final = round(tot / wsum) if wsum else None
+        # 病例分析按科目拆：完成数 / 均分 / 折算分（不足门槛按比例砍，见 analysis_subjects）
         out[sid] = {'history': h, 'analysis': a, 'reasoning': r, 'final': final,
+                    'analysis_subject': analysis_subjects.subject_stats(secs.get('analysis')),
                     'name': d.get('name', ''), 'class': d.get('class', ''),
                     'org': d.get('org', ''), 'role': d.get('role', '')}
     return out
@@ -185,6 +192,8 @@ def collect():
                                   'score': score, 'report_id': rep_id, 'ts': ts})
                 continue
             klass = canon
+        if sid in NON_STUDENT_SIDS:
+            continue
         row = ensure(sid, name or roster.get(sid, {}).get('name', ''),
                      klass or roster.get(sid, {}).get('class', ''), org, role)
         m = row['modules'].setdefault(mod, {'best': None, 'latest': None,
@@ -197,7 +206,7 @@ def collect():
 
     # 2) 思维训练成绩
     for sid, t in _thinking_scores().items():
-        if sid == 'abc123' or _is_junk(t.get('name')):
+        if sid in NON_STUDENT_SIDS or _is_junk(t.get('name')):
             continue
         row = ensure(sid, t.get('name') or roster.get(sid, {}).get('name', ''),
                      t.get('class') or roster.get(sid, {}).get('class', ''),
@@ -209,6 +218,7 @@ def collect():
                                                   'reasoning': t['reasoning']}}
         row['thinking_detail'] = {'history': t['history'], 'analysis': t['analysis'],
                                   'reasoning': t['reasoning'], 'final': t['final']}
+        row['analysis_subject'] = t.get('analysis_subject') or {}
 
     # 各板块每次成绩按提交时间排序（文件按会话ID遍历，时间未必有序）
     for row in rows.values():
@@ -259,6 +269,7 @@ def class_rows(klass=''):
             rec[key] = m['best'] if m else None
         rec['report_ids'] = {k: v['report_id'] for k, v in r['modules'].items() if v.get('report_id')}
         rec['thinking_detail'] = r.get('thinking_detail')
+        rec['analysis_subject'] = r.get('analysis_subject') or {}
         done = [k for k, _ in MODULES if rec.get(k) is not None]
         rec['done_modules'] = done
         out.append(rec)

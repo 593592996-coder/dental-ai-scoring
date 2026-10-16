@@ -21,14 +21,16 @@ from students import (load_roster, roster_exists, load_students, list_classes,
                       roster_source_files, SCORE_COLS)
 import attempts
 import bans
+from analysis_subjects import official_score as _official_analysis
 from case_photos import photos_for
 
 # 教师试用账号：只需在学号框输 abc123 即登录（无需姓名/密码）；成绩标记 teacher，不进学生总览/导出
 TEACHER_ACCOUNT = {'sid': 'abc123',
                    'name': '教师体验', 'class': '（教师体验，不计入学生成绩）'}
 
-# 病例分析：每生每例最多提交几次（限次防「打分后回显答案→反复重交刷分」）；分数取历次最高
-ANALYSIS_MAX_TRIES = 3
+# 病例分析：每生每例最多提交几次（限次防「打分后回显答案→反复重交刷分」）；
+# 2026-10-16 起改 2 次、历次取平均（此前为 3 次取最高；旧成绩不回溯）
+ANALYSIS_MAX_TRIES = 2
 
 # 手机号账号内部加此前缀，与学生学号防撞
 PHONE_PREFIX = 'T-'
@@ -525,7 +527,7 @@ def analysis_score(case_id):
         return jsonify({'error': '病例不存在'}), 404
     sid = _student_id()
     used = _tries_used(sid, 'analysis', case_id)
-    # 前 3 次计分（取最高）；第 4 次起仍可继续练，但不再写成绩。教师号始终计分。
+    # 前 2 次计分（取平均）；第 3 次起仍可继续练，但不再写成绩。教师号始终计分。
     counted = used < ANALYSIS_MAX_TRIES or bool(session.get('is_teacher'))
     a = rc['analysis']
     d = request.get_json()
@@ -534,7 +536,7 @@ def analysis_score(case_id):
     diff = (d.get('differential') or '').strip()
     treat = (d.get('treatment') or '').strip()
 
-    # —— 诊断 30 ——
+    # —— 关键词判分（2026-10-16 定：本板块只用关键词，不调 AI。秒出分、零成本）——
     correct_diag = a['diagnosis']
     if diag == correct_diag:
         diag_score = 30
@@ -544,27 +546,20 @@ def analysis_score(case_id):
         hit = sum(1 for acc in a.get('acceptable_diag', []) if acc and acc in diag)
         diag_score = min(20, hit * 8) if hit else 6
 
-    # —— 诊断依据 30 ——
-    basis_rows = []
-    for bp in a['basis_points']:
-        hit = any(k and k in basis for k in bp['keywords'])
-        basis_rows.append({'text': bp['text'], 'hit': hit})
+    basis_rows = [{'text': bp['text'],
+                   'hit': any(k and k in basis for k in bp['keywords'])}
+                  for bp in a['basis_points']]
+    diff_rows = [{'name': dp['name'], 'point': dp['point'],
+                  'hit': (dp['name'] in diff) or any(k and k in diff for k in dp.get('keywords', []))}
+                 for dp in a.get('differential_exam', [])]
+    treat_rows = [{'text': tp['text'],
+                   'hit': any(k and k in treat for k in tp['keywords'])}
+                  for tp in a['treatment_points']]
+
     basis_hit = sum(1 for r in basis_rows if r['hit'])
     basis_score = round(basis_hit / len(basis_rows) * 30) if basis_rows else 0
-
-    # —— 鉴别诊断 20（考试鉴别）——
-    diff_rows = []
-    for dp in a.get('differential_exam', []):
-        hit = (dp['name'] in diff) or any(k and k in diff for k in dp.get('keywords', []))
-        diff_rows.append({'name': dp['name'], 'hit': hit, 'point': dp['point']})
     diff_hit = sum(1 for r in diff_rows if r['hit'])
     diff_score = round(diff_hit / max(len(diff_rows), 1) * 20) if diff_rows else 16
-
-    # —— 治疗设计 20 ——
-    treat_rows = []
-    for tp in a['treatment_points']:
-        hit = any(k and k in treat for k in tp['keywords'])
-        treat_rows.append({'text': tp['text'], 'hit': hit})
     treat_hit = sum(1 for r in treat_rows if r['hit'])
     treat_score = round(treat_hit / len(treat_rows) * 20) if treat_rows else 0
 
@@ -580,7 +575,7 @@ def analysis_score(case_id):
                     'basis_points': [x['text'] for x in a['basis_points']]},
     }
     if counted:
-        _save_score(case_id, 'analysis', total, keep_max=True, count_try=True)
+        _save_score(case_id, 'analysis', total, take_avg=True, count_try=True)   # 2次取平均
         shown_used = used + 1
     else:
         shown_used = used          # 练习轮不写成绩、也不涨计数
@@ -817,7 +812,7 @@ def _tries_used(sid, section, case_id):
     return int(rec.get('tries', {}).get(section, {}).get(case_id, 0) or 0)
 
 
-def _save_score(case_id, section, score, keep_max=False, count_try=False):
+def _save_score(case_id, section, score, keep_max=False, count_try=False, take_avg=False):
     sid = _student_id()
     path = _score_file(sid)
     rec = {}
@@ -827,7 +822,17 @@ def _save_score(case_id, section, score, keep_max=False, count_try=False):
         except: rec = {}
     rec.setdefault('sections', {})
     sec = rec['sections'].setdefault(section, {})
-    if keep_max and isinstance(sec.get(case_id), (int, float)):
+    if take_avg:
+        # 历次【计分】提交取平均（2026-10-16 起，2 次）。
+        # 旧「取最高」时代的存量分迁移为第 1 次计入，不回溯重算。
+        hist = rec.setdefault('avg_hist', {}).setdefault(section, {})
+        arr = hist.get(case_id) if isinstance(hist.get(case_id), list) else []
+        if not arr and isinstance(sec.get(case_id), (int, float)):
+            arr = [sec[case_id]]
+        arr.append(score)
+        hist[case_id] = arr
+        sec[case_id] = round(sum(arr) / len(arr))
+    elif keep_max and isinstance(sec.get(case_id), (int, float)):
         sec[case_id] = max(sec[case_id], score)     # 只升不降：保留历次最高分
     else:
         sec[case_id] = score
@@ -854,7 +859,8 @@ def final_score():
             rec = json.load(f)
     secs = rec.get('sections', {})
     def avg(d): return round(sum(d.values()) / len(d)) if d else None
-    h, an, rs = avg(secs.get('history', {})), avg(secs.get('analysis', {})), avg(secs.get('reasoning', {}))
+    # 病例分析用正式折算口径（均分×完成进度，2026-10-16 起计入总评，与学生通知一致）
+    h, an, rs = avg(secs.get('history', {})), _official_analysis(secs.get('analysis', {})), avg(secs.get('reasoning', {}))
     parts = {}
     total = 0; wsum = 0
     for key, val in (('history', h), ('analysis', an), ('reasoning', rs)):

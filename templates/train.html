@@ -15,9 +15,26 @@ body{font-family:'Microsoft YaHei',sans-serif;background:#f0f4f8;min-height:100v
 .mod .n{font-size:24px;font-weight:800;color:#2B7BEC}.mod h3{font-size:15px;margin:4px 0}.mod p{font-size:12px;color:#777;line-height:1.5}
 .mod .wt{font-size:11px;color:#27ae60;font-weight:700;margin-top:6px}
 .case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+/* 科目入口卡 */
+.subj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:6px}
+.subj-card{background:#fff;border-radius:14px;padding:24px 16px;text-align:center;cursor:pointer;border:2px solid transparent;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:.2s}
+.subj-card:hover{border-color:#2B7BEC;transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.13)}
+.subj-card{--bd-ring:#CFE3E6}
+.subj-card .ico{font-size:42px;line-height:1;margin-bottom:10px;color:#2E7D8A}
+.subj-card .ico svg{display:block;margin:0 auto}
+.subj-card.off .ico{color:#b6c2cb}
+.subj-card .nm{font-size:17px;font-weight:800;color:#1B3A5C}
+.subj-card .ds{font-size:12px;color:#8a94a6;margin-top:6px;line-height:1.5}
+.subj-card.off{opacity:.55;cursor:not-allowed;background:#f7f9fc;box-shadow:none;--bd-ring:#e6ebf0}
+.subj-card.off:hover{border-color:transparent;transform:none;box-shadow:none}
+.subj-card.off .nm{color:#98a2b3}
+.subj-empty{font-size:12px;color:#a7b0be;margin:16px 0 4px;padding-left:6px}
 .case-card{background:#fff;border-radius:10px;padding:12px;border:1.5px solid #e0e0e0;cursor:pointer;transition:.2s}
 .case-card:hover{border-color:#2B7BEC;background:#f5f9ff}
 .case-card .t{font-weight:700;font-size:14px}
+.case-card .no{display:inline-block;font-size:11px;font-weight:800;color:#2B7BEC;background:#e8f0fe;border-radius:6px;padding:1px 7px;margin-right:7px;vertical-align:1px}
+.case-card .cc{font-size:12px;font-weight:400;color:#98a2b3;line-height:1.5;margin:5px 0 0;padding:0;background:none;border:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.case-card .lv{margin-top:6px}
 .case-card .tag{display:inline-block;font-size:11px;background:#e8f0fe;color:#1B5;font-weight:700;padding:2px 8px;border-radius:10px;margin:6px 4px 0 0}
 .case-card .lv{font-size:11px;color:#e67e22}
 .case-card.off{opacity:.55}
@@ -63,12 +80,17 @@ textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;borde
 .block{background:#fdecea;border:1px solid #f5b7b1;border-left:4px solid #c0392b;border-radius:8px;padding:10px;margin:8px 0;font-size:13px;color:#922}
 .ans{background:#eafaf1;border:1px solid #abebc6;border-radius:8px;padding:10px;font-size:13px;margin:8px 0;white-space:pre-wrap}
 .material{background:#f8f9fb;border:1px solid #e3e7ee;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:300px;overflow-y:auto}
+.tries{background:#f2f8f7;border:1px solid #cfe3e1;border-radius:8px;padding:8px 12px;font-size:12.5px;color:#2E7D8A;margin-bottom:10px}
+.tries b{font-weight:700}
+.tries .no{color:#D07A5C;font-weight:600}
+.practice{background:#fdf6e6;border:1px solid #f0dcae;border-radius:8px;padding:9px 12px;font-size:12.5px;color:#8a6d3b;margin-bottom:8px}
 .phase-steps{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
 .pstep{font-size:12px;padding:5px 10px;border-radius:14px;background:#eee;color:#999}
 .pstep.on{background:#2B7BEC;color:#fff}.pstep.dn{background:#d5f5e3;color:#1e8449}
 .hidden{display:none}
 .back{font-size:12px;color:#2B7BEC;cursor:pointer;margin-bottom:8px;display:inline-block}
 </style>
+<script src="/static/js/subject_icons.js"></script>
 </head>
 <body>
 <div class="header"><h1>🧠 临床思维训练</h1><span style="display:inline-flex;align-items:center;gap:12px"><span id="idChipSlot"></span><a href="/admin">教师后台</a><a href="/">← 返回板块</a></span></div>
@@ -88,9 +110,15 @@ textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;borde
         <div id="finalBox" style="margin-top:12px"></div>
       </div>
     </div>
-    <!-- 第二级：选了板块后才显示该板块的病例 -->
-    <div id="casePick" class="hidden">
+    <!-- 第二级：选了板块后 → 选科目（口内/口外/口修） -->
+    <div id="subjectPick" class="hidden">
       <span class="back" onclick="backToModules()">← 返回板块选择</span>
+      <div class="section-title" id="subjectPickTitle">选择科目</div>
+      <div class="subj-grid" id="subjGrid"></div>
+    </div>
+    <!-- 第三级：选了科目后 → 选该科目的病例 -->
+    <div id="casePick" class="hidden">
+      <span class="back" onclick="backToSubjects()">← 返回科目选择</span>
       <div class="section-title" id="casePickTitle">选择病例</div>
       <div style="font-size:12px;color:#999;margin:-4px 0 8px">仅显示主诉症状，不提示诊断；灰显为超纲/执业范畴</div>
       <div class="case-grid" id="caseGrid"></div>
@@ -108,31 +136,91 @@ textarea{width:100%;min-height:60px;padding:9px;border:1.5px solid #d5dbe3;borde
 
 <script>
 let CASES = {};
-let curModule = null, curCase = null;
+let curModule = null, curSubject = null, curCase = null;
 const MOD_NAME={history:'① 病史采集',analysis:'② 病例分析',reasoning:'③ 临床思维训练'};
+
+// 科目入口：图标/说明可在此直接改
+const SUBJECT_ORDER = ['口内','口外','口修'];
+// 口内/口外/口修 用三科室真图标（static/js/subject_icons.js，教师端学情看板共用同一份）；
+// 题库等没有专属图标的科目回落到 emoji。
+const SUBJECT_ICON = { '题库':'📚' };
+function subjIconHtml(s, size){
+  const ic = (window.SUBJECT_ICONS||{})[s];
+  if(!ic) return SUBJECT_ICON[s]||'📁';
+  size = size||52;
+  return `<svg viewBox="0 0 120 120" style="width:${size}px;height:${size}px">${ic}</svg>`;
+}
+const SUBJECT_DESC = { '口内':'牙体牙髓 · 牙周 · 黏膜', '口外':'拔牙 · 外科处置', '口修':'冠桥 · 义齿修复', '题库':'同类备选题' };
 
 async function init(){
   const r = await fetch('/train/api/cases'); CASES = await r.json();
 }
-function renderCaseGrid(){
+function subjOf(c){ return c.subject || '未分类'; }
+// 序号：接口按板块下发 {history,analysis,reasoning} 三套，各科目在各自板块里从 1 开始
+function caseNo(c, m){
+  m = m || curModule;
+  const n = (c.no && typeof c.no === 'object') ? c.no[m] : c.no;
+  return String(n==null?'':n).padStart(2,'0');
+}
+function casesOfModule(){
   const flag = 'has_' + curModule;
-  const list = Object.entries(CASES).filter(([id,c])=>c[flag]);
-  document.getElementById('caseGrid').innerHTML = list.map(([id,c])=>`
-    <div class="case-card ${c.in_scope?'':'off'}" onclick="openCase('${id}')">
-      <div class="t">🦷 ${c.chief_complaint||c.title}</div>
-      <div class="lv" style="margin-top:6px">${'★'.repeat(c.level)} 难度 ${c.in_scope?'':'（超纲·执业）'}</div>
-    </div>`).join('');
+  return Object.entries(CASES).filter(([id,c])=>c[flag]);
+}
+function caseCardHtml(id,c){
+  return `<div class="case-card ${c.in_scope?'':'off'}" onclick="openCase('${id}')">
+      <div class="t"><span class="no">${caseNo(c)}</span>${c.brief||c.chief_complaint||'（待查病例）'}</div>
+      <div class="cc">${c.chief_complaint||''}</div>
+      <div class="lv">${'★'.repeat(c.level)} 难度 ${c.in_scope?'':'（超纲·执业）'}</div>
+    </div>`;
+}
+// 第二级：科目入口卡（口内/口外/口修；空的科目灰显不可点）
+function renderSubjectGrid(){
+  const list = casesOfModule();
+  const seen = new Set(list.map(([id,c])=>subjOf(c)));
+  const ordered = SUBJECT_ORDER.filter(s=>seen.has(s))
+      .concat([...seen].filter(s=>!SUBJECT_ORDER.includes(s) && s!=='未分类'))
+      .concat(seen.has('未分类') ? ['未分类'] : [])
+      .concat(SUBJECT_ORDER.filter(s=>!seen.has(s)));   // 空科目排最后
+  document.getElementById('subjGrid').innerHTML = ordered.map(s=>{
+    const n = list.filter(([id,c])=>subjOf(c)===s).length;
+    const on = n > 0;
+    return `<div class="subj-card ${on?'':'off'}" ${on?`onclick="pickSubject('${s}')"`:''}>
+        <div class="ico">${subjIconHtml(s)}</div>
+        <div class="nm">${s}</div>
+        <div class="ds">${on ? n+' 个病例 · '+(SUBJECT_DESC[s]||'') : '暂无病例'}</div>
+      </div>`;
+  }).join('');
+}
+// 第三级：某科目下的病例列表
+function renderCaseGrid(){
+  const list = casesOfModule().filter(([id,c])=>subjOf(c)===curSubject);
+  document.getElementById('caseGrid').innerHTML =
+      list.map(([id,c])=>caseCardHtml(id,c)).join('') || '<div class="subj-empty">该科目暂无病例</div>';
 }
 function pickModule(m){
-  curModule = m;
-  document.getElementById('casePickTitle').textContent = MOD_NAME[m] + ' · 选择病例';
-  renderCaseGrid();
+  curModule = m; curSubject = null;
+  document.getElementById('subjectPickTitle').textContent = MOD_NAME[m] + ' · 选择科目';
+  renderSubjectGrid();
   document.getElementById('modulePick').classList.add('hidden');
+  document.getElementById('casePick').classList.add('hidden');
+  document.getElementById('subjectPick').classList.remove('hidden');
+}
+function pickSubject(s){
+  curSubject = s;
+  document.getElementById('casePickTitle').textContent = MOD_NAME[curModule] + ' · ' + s;
+  renderCaseGrid();
+  document.getElementById('subjectPick').classList.add('hidden');
   document.getElementById('casePick').classList.remove('hidden');
 }
-function backToModules(){
-  curModule = null;
+function backToSubjects(){
+  curSubject = null;
   document.getElementById('casePick').classList.add('hidden');
+  document.getElementById('subjectPick').classList.remove('hidden');
+}
+function backToModules(){
+  curModule = null; curSubject = null;
+  document.getElementById('casePick').classList.add('hidden');
+  document.getElementById('subjectPick').classList.add('hidden');
   document.getElementById('modulePick').classList.remove('hidden');
 }
 
@@ -141,7 +229,9 @@ function openCase(id){
   const m = curModule || 'history';
   document.getElementById('home').classList.add('hidden');
   document.getElementById('work').classList.remove('hidden');
-  document.getElementById('workTitle').textContent = '🦷 ' + (CASES[id].chief_complaint || CASES[id].title);
+  const cc = CASES[id];
+  const num = (cc.subject||'') + caseNo(cc, m);
+  document.getElementById('workTitle').textContent = `🦷 ${num} · ${cc.brief || cc.chief_complaint || '（待查病例）'}`;
   if(m==='history') renderHistory();
   else if(m==='analysis') renderAnalysis();
   else renderReasoning();
@@ -241,31 +331,52 @@ let analysisData=null;
 async function renderAnalysis(){
   const body=document.getElementById('workBody');
   body.innerHTML=`<div class="cc-box"><div class="cc">阅读下面病例，书面完成：诊断、诊断依据、鉴别诊断、治疗设计。</div>
+    <div class="tries" id="aTries"></div>
     <div class="material" id="aMaterial">加载中…</div>
     <div class="field"><label>诊断</label><input id="aDiag" placeholder="如：36急性牙髓炎"></div>
     <div class="field"><label>诊断依据（逐条）</label><textarea id="aBasis" placeholder="把支持诊断的症状、体征、影像依据写出来"></textarea></div>
     <div class="field"><label>鉴别诊断（需要排除哪些病）</label><textarea id="aDiff" placeholder="如：急性龈乳头炎、三叉神经痛…"></textarea></div>
     <div class="field"><label>治疗设计</label><textarea id="aTreat" placeholder="治疗原则与方案"></textarea></div>
-    <button class="btn green" onclick="aScore()">提交评分</button>
+    <button class="btn green" id="aSubmitBtn" onclick="aScore()">提交评分</button>
     <div id="aResult"></div></div>`;
   const r=await fetch(`/train/api/analysis/${curCase}`); const d=await r.json();
   if(d.error){ body.innerHTML=`<div class="block">${d.error}</div>`; return; }
   analysisData=d; document.getElementById('aMaterial').textContent=d.material;
+  renderTries(d.tries);
+}
+function renderTries(t){
+  const box=document.getElementById('aTries'); if(!box||!t) return;
+  if(t.left<=0){
+    box.innerHTML=`<span class="no">本题 ${t.max} 次计分机会已用完，成绩按这 ${t.max} 次的平均分定下</span>；`+
+      `之后仍可继续练，<b>但不再计分</b>`;
+  }else{
+    box.innerHTML=`本题可提交 <b>${t.max}</b> 次（<b>取平均分</b>，第2次乱写会拉低第1次），已用 <b>${t.used}</b> 次，还可计分提交 <b>${t.left}</b> 次`;
+  }
 }
 async function aScore(){
   const payload={diagnosis:val('aDiag'),basis:val('aBasis'),differential:val('aDiff'),treatment:val('aTreat')};
   const r=await fetch(`/train/api/analysis/score/${curCase}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  const d=await r.json(); const s=d.scores;
-  let html=`<div style="margin-top:14px"><div class="score-big">${s.total}<small> /100</small></div>`;
+  const d=await r.json();
+  if(!r.ok||d.error){
+    document.getElementById('aResult').innerHTML=`<div class="ans" style="border-color:#D07A5C;background:#FCF1ED">${d.error||'提交失败'}</div>`;
+    return;
+  }
+  renderTries(d.tries);
+  const s=d.scores;
+  const practice=d.counted===false
+    ? `<div class="practice">📝 本次为<b>练习</b>，不计入成绩（本题计分次数已用完，成绩按前 ${d.tries.max} 次的平均分定下）</div>`
+    : '';
+  let html=`<div style="margin-top:14px">${practice}<div class="score-big">${s.total}<small> /100</small></div>`;
   [['诊断',s.diagnosis,30],['诊断依据',s.basis,30],['鉴别诊断',s.differential,20],['治疗设计',s.treatment,20]].forEach(([n,v,m])=>{
     html+=`<div class="bar-row"><div class="lab">${n}</div><div class="track"><div class="fill" style="width:${v/m*100}%"></div></div><div class="val">${v}/${m}</div></div>`;});
+  const cm=r=>r.comment?`<span style="color:#9c9689"> · ${r.comment}</span>`:'';
   html+=`<div class="section-title">诊断依据 · 得分点</div>`+
-    d.basis_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}</div>`).join('');
+    d.basis_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}${cm(r)}</div>`).join('');
   html+=`<div class="section-title">鉴别诊断 · 标准答案（考试要求）</div>`+
-    d.diff_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} <b>${r.name}</b>——${r.point}</div>`).join('');
+    d.diff_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} <b>${r.name}</b>——${r.point}${cm(r)}</div>`).join('');
   if(d.correct.differential_clinical.length) html+=`<div style="font-size:12px;color:#888;margin-top:4px">临床加做鉴别：${d.correct.differential_clinical.join('、')}</div>`;
   html+=`<div class="section-title">治疗设计 · 得分点</div>`+
-    d.treat_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}</div>`).join('');
+    d.treat_rows.map(r=>`<div style="font-size:12.5px;margin:3px 0">${r.hit?'<span class="ok">✓</span>':'<span class="no">✗</span>'} ${r.text}${cm(r)}</div>`).join('');
   html+=`<div class="ans"><b>✅ 正确诊断：</b>${d.correct.diagnosis}</div></div>`;
   document.getElementById('aResult').innerHTML=html;
 }
