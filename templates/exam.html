@@ -188,7 +188,7 @@ if(IS_READING){
   camInput.addEventListener('change',e=>handleFiles(e.target.files));
   function handleFiles(files){
     for(const f of files){
-      if(!f.type.startsWith('image/')||selectedFiles.length>=MAX_IMG)continue;
+      if(!(f.type.startsWith('image/')||/\.(heic|heif)$/i.test(f.name))||selectedFiles.length>=MAX_IMG)continue;
       selectedFiles.push(f);
       const r=new FileReader();
       r.onload=e=>{

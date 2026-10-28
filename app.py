@@ -45,12 +45,12 @@ os.makedirs(CONSULT_IMG_DIR, exist_ok=True)
 BASE_DIR = Path(__file__).parent.absolute()
 UPLOAD_FOLDER = BASE_DIR / 'uploads'
 REPORT_FOLDER = BASE_DIR / 'reports'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp', 'tiff'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp', 'tiff', 'webp', 'heic', 'heif'}
 
 app = Flask(__name__)
 app.secret_key = 'kouqiang_neike_2026_ai_scoring'
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+app.config['MAX_CONTENT_LENGTH'] = 40 * 1024 * 1024  # 40MB max（冠修复6机位相册原图约15-24MB）
 
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 REPORT_FOLDER.mkdir(exist_ok=True)
@@ -171,6 +171,41 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def _archive_ext(filename):
+    """存档用的扩展名。HEIC/HEIF 解码后一律按 JPEG 存（save_image_compressed 会重编码）。"""
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg'
+    return 'jpg' if ext in ('heic', 'heif') else ext
+
+
+_HEIF_READY = None
+
+
+def _pil_decode_upright(data):
+    """用 PIL 解码并按 EXIF 方向转正，返回 BGR 矩阵；不可用时返回 None。
+
+    手机竖拍的照片像素是横着存的、靠 EXIF 方向标记显示为竖直，OpenCV 不认这个标记，
+    直接解码会把照片侧过来送进评分引擎（实测同一张根管片 87→71 分）。这里先转正，
+    顺带让 HEIC/HEIF 能正常解码。"""
+    global _HEIF_READY
+    try:
+        from PIL import Image, ImageOps
+        if _HEIF_READY is None:
+            try:
+                import pillow_heif
+                pillow_heif.register_heif_opener()
+            except Exception:
+                pass
+            _HEIF_READY = True
+        im = ImageOps.exif_transpose(Image.open(BytesIO(data)))
+        if im.mode != 'RGB':
+            im = im.convert('RGB')
+        import cv2
+        import numpy as np
+        return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+    except Exception:
+        return None
+
+
 def save_image_compressed(file, filepath, max_dim=1600, quality=82):
     """保存学生上传照片时用 OpenCV 压缩（iPhone 原图常 1-3MB，免费档磁盘仅 512MB）。
     长边压到 max_dim、JPEG quality，体积约降到 1/10，报告附图仍清晰；失败则回退原图保存。"""
@@ -178,7 +213,9 @@ def save_image_compressed(file, filepath, max_dim=1600, quality=82):
         import cv2
         import numpy as np
         data = file.read()
-        mat = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        mat = _pil_decode_upright(data)
+        if mat is None:
+            mat = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
         if mat is None:
             file.seek(0); file.save(str(filepath)); return
         h, w = mat.shape[:2]
@@ -222,7 +259,7 @@ def _safe_reports(analyze_fn, paths, **kwargs):
 # ── 错误处理器：对分析/接口请求始终返回 JSON，避免前端 .json() 崩成 Safari 黑话 ──
 @app.errorhandler(413)
 def too_large(e):
-    return jsonify({'error': '照片总大小超过 16MB 上限，请减少张数或压缩后再上传（iPhone 可在设置-相机改用较小格式）。'}), 413
+    return jsonify({'error': '照片总大小超过 40MB 上限，请减少张数或压缩后再上传（iPhone 可在设置-相机改用较小格式）。'}), 413
 
 
 @app.errorhandler(500)
@@ -831,7 +868,7 @@ def analyze():
     session_id = uuid.uuid4().hex[:8]
     for i, file in enumerate(files):
         if file and allowed_file(file.filename):
-            ext = file.filename.rsplit('.', 1)[1].lower()
+            ext = _archive_ext(file.filename)
             filename = f'{session_id}_{i}_{int(time.time())}.{ext}'
             filepath = UPLOAD_FOLDER / filename
             save_image_compressed(file, filepath)
@@ -1325,7 +1362,7 @@ def analyze_endo():
     saved_paths, session_id = [], uuid.uuid4().hex[:8]
     for i, file in enumerate(files):
         if file and allowed_file(file.filename):
-            ext = file.filename.rsplit('.', 1)[1].lower()
+            ext = _archive_ext(file.filename)
             fp = UPLOAD_FOLDER / f'endo_{session_id}_{i}_{int(time.time())}.{ext}'
             save_image_compressed(file, fp); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
@@ -1379,7 +1416,7 @@ def analyze_xray():
     saved_paths, session_id = [], uuid.uuid4().hex[:8]
     for i, file in enumerate(files):
         if file and allowed_file(file.filename):
-            ext = file.filename.rsplit('.', 1)[1].lower()
+            ext = _archive_ext(file.filename)
             fp = UPLOAD_FOLDER / f'xray_{session_id}_{i}_{int(time.time())}.{ext}'
             save_image_compressed(file, fp); saved_paths.append(str(fp))
     if not saved_paths: return jsonify({'error': '无有效文件'}), 400
@@ -1504,7 +1541,7 @@ def exam_submit(exam_id):
         saved = []
         for i, f in enumerate(files[:2]):
             if f and f.filename and allowed_file(f.filename):
-                ext = f.filename.rsplit('.', 1)[1].lower()
+                ext = _archive_ext(f.filename)
                 fp = EXAM_UPLOAD_FOLDER / f'{exam_id}_{me["sid"]}_{i}_{int(time.time())}.{ext}'
                 save_image_compressed(f, fp)
                 saved.append(str(fp))
@@ -1530,7 +1567,7 @@ def _run_crown(engine, prefix, tooth, allowed_teeth):
     for slot, _label in CROWN_SLOTS.items():
         f = request.files.get(slot)
         if f and f.filename and allowed_file(f.filename):
-            ext = f.filename.rsplit('.', 1)[1].lower()
+            ext = _archive_ext(f.filename)
             fp = UPLOAD_FOLDER / f'{prefix}_{session_id}_{slot}_{int(time.time())}.{ext}'
             save_image_compressed(f, fp)
             photos[slot] = str(fp)
@@ -1593,7 +1630,7 @@ def analyze_crown_post():
 def _save_one(f, prefix, session_id, jaw):
     if not (f and f.filename and allowed_file(f.filename)):
         return None
-    ext = f.filename.rsplit('.', 1)[1].lower()
+    ext = _archive_ext(f.filename)
     fp = UPLOAD_FOLDER / f'{prefix}_{session_id}_{jaw}_{int(time.time())}.{ext}'
     save_image_compressed(f, fp)
     return str(fp)
